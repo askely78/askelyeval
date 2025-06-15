@@ -4,7 +4,7 @@ import sqlite3
 import os
 import openai
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = Flask(__name__)
 
 def get_db_connection():
@@ -14,7 +14,7 @@ def get_db_connection():
 
 def ask_gpt(prompt):
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
@@ -87,10 +87,7 @@ def webhook():
         if len(parts) >= 6:
             programme, compagnie, acc, util, adv, commentaire = [p.strip() for p in parts]
             cur.execute("INSERT INTO evaluations_fidelite (programme, compagnie, note_accumulation, note_utilisation, note_avantages, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (programme, compagnie, int(acc), int(util), int(adv), commentaire, user_number))
-            cur.execute("UPDATE utilisateurs SET points = points + 6 WHERE id = ?", (user_number,))
-            conn.commit()
-            msg.body("🛂 Merci pour ton retour sur ce programme. Tu gagnes 6 points Askely 🪙")
+                        (programme, compagnie, int(acc), int(util), int(adv), commentaire,
     elif msg_txt == "3":
         msg.body("🏨 Pour évaluer un hôtel, envoie : Nom, Ville, Date, Note (1-5), Commentaire")
     elif msg_txt.startswith("Nom hôtel"):
@@ -119,31 +116,34 @@ def webhook():
         vols = cur.execute("SELECT * FROM evaluations_vol WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
         hotels = cur.execute("SELECT * FROM evaluations_hotel WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
         restos = cur.execute("SELECT * FROM evaluations_restaurant WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
-        msg_txt = f"👤 Ton profil Askely :\\nPseudo : {profil['pseudo']}\\nPoints : {profil['points']} 🪙\\n\\n🔍 Derniers avis :"
-        for v in vols:
-            msg_txt += f"\\n✈️ {v['compagnie']} - Note {v['note']}/5"
-        for h in hotels:
-            msg_txt += f"\\n🏨 {h['nom_hotel']} - Note {h['note']}/5"
-        for r in restos:
-            msg_txt += f"\\n🍽️ {r['nom_restaurant']} - Note {r['note']}/5"
-        msg.body(msg_txt)
+        fid = cur.execute("SELECT * FROM evaluations_fidelite WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
 
+        msg_txt = f"👤 Ton profil Askely :\nPseudo : {profil['pseudo']}\nPoints : {profil['points']} 🪙\n\n🕓 Derniers avis :"
+        for v in vols:
+            msg_txt += f"\n✈️ {v['compagnie']} {v['numero_vol']} - Note {v['note']}/5"
+        for h in hotels:
+            msg_txt += f"\n🏨 {h['nom_hotel']} ({h['ville']}) - Note {h['note']}/5"
+        for r in restos:
+            msg_txt += f"\n🍽️ {r['nom_restaurant']} ({r['ville']}) - Note {r['note']}/5"
+        for f in fid:
+            msg_txt += f"\n🛂 {f['progra]()_
     else:
         gpt_response = ask_gpt(msg_txt)
-        msg.body("🤖 Réponse IA :\\n" + gpt_response)
+        msg.body("🤖 Réponse IA :\n" + gpt_response)
 
     conn.close()
     return str(response)
+
 def menu_principal():
     return (
         "👋 Bienvenue sur Askely 🌍\n"
-        "Gagne des points en évaluant tes expériences ✈️🏨🍽️\n\n"
+        "Gagne des points en évaluant tes expériences ✈️🏨🍽️🛂\n\n"
         "1️⃣ Évaluer un vol\n"
         "2️⃣ Évaluer un programme de fidélité\n"
         "3️⃣ Évaluer un hôtel\n"
         "4️⃣ Évaluer un restaurant\n"
         "5️⃣ Mon profil\n\n"
-        "Ou pose ta question librement 🤖"
+        "📌 Réponds avec le numéro de ton choix ou pose ta question librement 🤖"
     )
 
 if __name__ == "__main__":
