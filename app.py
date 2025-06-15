@@ -59,11 +59,14 @@ def webhook():
         conn.close()
         return str(response)
 
-    # Traitement des options
     msg_txt = incoming_msg.lower()
 
     if msg_txt == "1":
-        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vo
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vol\nNuméro de vol\nNote (1-5)\nCommentaire")
+        return str(response)
+    elif msg_txt == "2":
+        msg.body("🛂 Askely : Pour évaluer un programme de fidélité, envoie :\n\nNom du programme\nCompagnie aérienne\nNote sur l'accumulation (1-5)\nNote sur l'utilisation (1-5)\nNote sur les avantages (1-5)\nCommentaire")
+        return str(response)
     elif msg_txt == "3":
         msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos :\n\nNom de l’hôtel\nVille\nDate du séjour\nNote (1-5)\nCommentaire")
         return str(response)
@@ -118,7 +121,7 @@ def webhook():
                 conn.close()
                 return str(response)
         # Évaluation hôtel
-        if incoming_msg.count("\n") >= 4 and "hôtel" in incoming_msg.lower() or "hotel" in incoming_msg.lower():
+        if incoming_msg.count("\n") >= 4 and ("hôtel" in incoming_msg.lower() or "hotel" in incoming_msg.lower()):
             lignes = incoming_msg.split("\n")
             if len(lignes) == 5:
                 nom, ville, date, note, commentaire = lignes
@@ -155,23 +158,24 @@ def webhook():
         return str(response)
 
     conn.close()
-    msg.body("❓ Askely : Je n’ai pas compris. Envoie un chiffre (1 à 5) ou ta question.")
+    msg.body("❓ Askely : Je n’ai pas compris. Tape un chiffre (1 à 5) ou pose ta question.")
     return str(response)
 
 def menu_principal():
     return (
         "👋 Bienvenue sur Askely – Ton assistant de voyage intelligent 🌍\n"
-        "Évalue tes expériences et gagne des points 🎁\n\n"
-        "✏️ Tape le chiffre correspondant à ton choix :\n\n"
+        "Évalue tes expériences et gagne des points 🪙\n\n"
+        "✏️ Tape le chiffre correspondant à ton choix :\n"
         "1️⃣ Évaluer un vol ✈️\n"
         "2️⃣ Évaluer un programme de fidélité 🛂\n"
         "3️⃣ Évaluer un hôtel 🏨\n"
         "4️⃣ Évaluer un restaurant 🍽️\n"
         "5️⃣ Voir mon profil 👤\n\n"
-        "💬 Ou pose une question libre (ex : météo, réservation, info pays...)\n\n"
-        "📌 Envoie simplement le chiffre de ton choix pour commencer !"
+        "💬 Ou pose une question libre (ex : météo, réservation, info pays...)\n"
+        "📌 Envoie simplement le chiffre de ton choix !"
     )
 
 if __name__ == "__main__":
     init_db()
-    port =
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
