@@ -72,7 +72,9 @@ def init_db():
     )''')
 
     conn.commit()
-    conn.clo
+    conn.close()
+
+init_db()
 @app.route("/", methods=["GET"])
 def home():
     return "Askely est en ligne ✅"
@@ -87,16 +89,24 @@ def webhook():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Création du profil si nouveau user
+    # Création automatique du profil utilisateur s’il n’existe pas
     existing = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_id,)).fetchone()
     if not existing:
         cur.execute("INSERT INTO utilisateurs (id, pseudo, numero_hash, points) VALUES (?, ?, ?, ?)",
                     (user_id, f"user_{user_number[-4:]}", user_number, 0))
         conn.commit()
-        msg.body("👋 Bienvenue sur Askely, ton assistant de voyage intelligent 🌍\n"
-                 "Gagne des points à chaque avis ✨\n\n"
-                 "Voici ce que tu peux faire :\n\n"
-                 "✈️ Pour évaluer un vol → tape
+        msg.body(
+            "👋 Bienvenue sur Askely, ton assistant de voyage intelligent 🌍\n"
+            "Gagne des points à chaque avis ✨\n\n"
+            "Voici ce que tu peux faire :\n\n"
+            "✈️ Pour évaluer un vol → tape 1\n"
+            "🛂 Pour évaluer un programme de fidélité → tape 2\n"
+            "🏨 Pour évaluer un hôtel → tape 3\n"
+            "🍽️ Pour évaluer un restaurant → tape 4\n"
+            "👤 Pour consulter ton profil → tape 5\n"
+            "🤖 Pour poser une question libre (visa, vol, conseil…) → écris ta question directement\n\n"
+            "🪙 Chaque évaluation te fait gagner des points Askely 🎁\n"
+            "📌 Réponds avec le numéro de ton choix o
     if incoming_msg == "menu":
         msg.body("📋 Menu Askely :\n"
                  "1️⃣ Évaluer un vol ✈️\n"
@@ -140,7 +150,9 @@ def webhook():
         history = histo_f + "\n" + histo_r + "\n" + histo_h
         msg.body(f"👤 Ton profil Askely\n"
                  f"🧾 Nom : {row['pseudo']}\n"
-                 f"🪙 Poi
+                 f"🪙 Points : {row['points']} pts\n"
+                 f"📝 Avis déposés : {total_avis}\n\n"
+                 f"🗂️ Tes derniers avis :\n{history if history.strip() else 'Aucun avis encore.'}")
     elif incoming_msg.startswith("1"):
         parts = [x.strip() for x in incoming_msg.split(',')]
         if len(parts) >= 5:
@@ -155,7 +167,7 @@ def webhook():
 
     elif incoming_msg.startswith("2"):
         msg.body("🛂 Merci ! Envoie :\nNom du programme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
-        # Tu peux ensuite implémenter l'enregistrement si souhaité
+        # Implémentation possible de l’enregistrement
 
     elif incoming_msg.startswith("3"):
         parts = [x.strip() for x in incoming_msg.split(',')]
@@ -169,8 +181,20 @@ def webhook():
             conn.commit()
             msg.body(feedback + "\n🪙 Tu gagnes 7 points Askely.")
         else:
-            msg.body("🏨 Pour évaluer un hôtel,
+            msg.body("🏨 Pour évaluer un hôtel, envoie :\nNom, Ville, Date, Note (1 à 5), Commentaire")
+
+    elif incoming_msg.startswith("4"):
+        parts = [x.strip() for x in incoming_msg.split(',')]
+        if len(parts) >= 5:
+            resto, ville, date, note, commentaire = parts[:5]
+            note_int = int(note)
+            feedback = "😋 Merci pour ton avis ! On est ravi que ce restaurant t’ait plu 🎉" if note_int >= 4 else "Merci pour ton retour. Ton avis aidera les autres utilisateurs 🍽️"
+            cur.execute("INSERT INTO evaluations_restaurant (nom_restaurant, ville, date, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+                        (resto, ville, date, note_int, commentaire, user_id))
+            cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_id,))
+            co
     else:
+        # Réponse libre avec GPT-4o
         gpt_response = ask_gpt(incoming_msg)
         msg.body(f"🤖 Réponse IA :\n{gpt_response}")
 
