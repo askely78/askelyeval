@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify
 from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
@@ -34,7 +33,6 @@ def init_db():
     cur.execute("CREATE TABLE IF NOT EXISTS evaluations_restaurant (id INTEGER PRIMARY KEY AUTOINCREMENT, nom_restaurant TEXT, ville TEXT, date TEXT, note INTEGER, commentaire TEXT, user_id TEXT)")
     conn.commit()
     conn.close()
-
 @app.route("/", methods=["GET"])
 def home():
     return "✅ Askely agent est en ligne"
@@ -70,10 +68,8 @@ def webhook():
         conn.commit()
         msg.body(menu_principal())
         return str(response)
-
     if msg_txt == "1":
-        msg.body("✈️ Pour évaluer un vol, envoie :
-Compagnie, Numéro de vol, Date, Note (1-5), Commentaire")
+        msg.body("✈️ Pour évaluer un vol, envoie : Compagnie, Numéro de vol, Date, Note (1-5), Commentaire")
     elif msg_txt.startswith("Compagnie"):
         parts = msg_txt.split(",")
         if len(parts) >= 5:
@@ -83,9 +79,9 @@ Compagnie, Numéro de vol, Date, Note (1-5), Commentaire")
             cur.execute("UPDATE utilisateurs SET points = points + 10 WHERE id = ?", (user_number,))
             conn.commit()
             msg.body("✅ Merci pour ton avis sur ce vol. Tu gagnes 10 points Askely 🪙")
+
     elif msg_txt == "2":
-        msg.body("🛂 Pour évaluer un programme de fidélité, envoie :
-Programme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
+        msg.body("🛂 Pour évaluer un programme de fidélité, envoie : Programme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
     elif msg_txt.startswith("Programme"):
         parts = msg_txt.split(",")
         if len(parts) >= 6:
@@ -94,11 +90,10 @@ Programme, Compagnie, Note accumulation, Note utilisation, Note avantages, Comme
                         (programme, compagnie, int(acc), int(util), int(adv), commentaire, user_number))
             cur.execute("UPDATE utilisateurs SET points = points + 6 WHERE id = ?", (user_number,))
             conn.commit()
-            msg.body("🛂 Avis de programme enregistré. Tu gagnes 6 points Askely 🪙")
+            msg.body("🛂 Merci pour ton retour sur ce programme. Tu gagnes 6 points Askely 🪙")
     elif msg_txt == "3":
-        msg.body("🏨 Pour évaluer un hôtel, envoie :
-Nom, Ville, Date, Note (1-5), Commentaire")
-    elif msg_txt.startswith("Nom") and "Hôtel" in msg_txt:
+        msg.body("🏨 Pour évaluer un hôtel, envoie : Nom, Ville, Date, Note (1-5), Commentaire")
+    elif msg_txt.startswith("Nom hôtel"):
         parts = msg_txt.split(",")
         if len(parts) >= 5:
             nom, ville, date, note, commentaire = [p.strip() for p in parts]
@@ -106,11 +101,11 @@ Nom, Ville, Date, Note (1-5), Commentaire")
                         (nom, ville, date, int(note), commentaire, user_number))
             cur.execute("UPDATE utilisateurs SET points = points + 7 WHERE id = ?", (user_number,))
             conn.commit()
-            msg.body("🏨 Merci pour ton retour hôtelier. Tu gagnes 7 points Askely 🪙")
+            msg.body("🏨 Merci pour ton avis sur cet hôtel. Tu gagnes 7 points Askely 🪙")
+
     elif msg_txt == "4":
-        msg.body("🍽️ Pour évaluer un restaurant, envoie :
-Nom, Ville, Date, Note (1-5), Commentaire")
-    elif msg_txt.startswith("Nom") and "Restau" in msg_txt:
+        msg.body("🍽️ Pour évaluer un restaurant, envoie : Nom, Ville, Date, Note (1-5), Commentaire")
+    elif msg_txt.startswith("Nom restaurant"):
         parts = msg_txt.split(",")
         if len(parts) >= 5:
             nom, ville, date, note, commentaire = [p.strip() for p in parts]
@@ -118,38 +113,36 @@ Nom, Ville, Date, Note (1-5), Commentaire")
                         (nom, ville, date, int(note), commentaire, user_number))
             cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_number,))
             conn.commit()
-            msg.body("🍽️ Merci pour ton avis resto ! Tu gagnes 5 points Askely 🪙")
+            msg.body("🍽️ Merci pour ton avis sur ce restaurant. Tu gagnes 5 points Askely 🪙")
     elif msg_txt == "5":
         profil = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,)).fetchone()
-        msg.body(f"👤 Ton profil Askely :
-Pseudo : {profil['pseudo']}
-Points : {profil['points']} 🪙")
+        vols = cur.execute("SELECT * FROM evaluations_vol WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
+        hotels = cur.execute("SELECT * FROM evaluations_hotel WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
+        restos = cur.execute("SELECT * FROM evaluations_restaurant WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
+        msg_txt = f"👤 Ton profil Askely :\\nPseudo : {profil['pseudo']}\\nPoints : {profil['points']} 🪙\\n\\n🔍 Derniers avis :"
+        for v in vols:
+            msg_txt += f"\\n✈️ {v['compagnie']} - Note {v['note']}/5"
+        for h in hotels:
+            msg_txt += f"\\n🏨 {h['nom_hotel']} - Note {h['note']}/5"
+        for r in restos:
+            msg_txt += f"\\n🍽️ {r['nom_restaurant']} - Note {r['note']}/5"
+        msg.body(msg_txt)
+
     else:
         gpt_response = ask_gpt(msg_txt)
-        msg.body("🤖 Réponse IA :
-" + gpt_response)
+        msg.body("🤖 Réponse IA :\\n" + gpt_response)
 
     conn.close()
     return str(response)
-
 def menu_principal():
     return (
-        "👋 Bienvenue sur Askely 🌍
-"
-        "Gagne des points en évaluant tes expériences ✈️🏨🍽️
-
-"
-        "1️⃣ Évaluer un vol
-"
-        "2️⃣ Évaluer un programme de fidélité
-"
-        "3️⃣ Évaluer un hôtel
-"
-        "4️⃣ Évaluer un restaurant
-"
-        "5️⃣ Mon profil
-
-"
+        "👋 Bienvenue sur Askely 🌍\n"
+        "Gagne des points en évaluant tes expériences ✈️🏨🍽️\n\n"
+        "1️⃣ Évaluer un vol\n"
+        "2️⃣ Évaluer un programme de fidélité\n"
+        "3️⃣ Évaluer un hôtel\n"
+        "4️⃣ Évaluer un restaurant\n"
+        "5️⃣ Mon profil\n\n"
         "Ou pose ta question librement 🤖"
     )
 
