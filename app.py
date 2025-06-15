@@ -3,183 +3,142 @@ from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
 import openai
 import os
+from datetime import datetime
 
 app = Flask(__name__)
-
-# Configuration de l'API OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Connexion DB
-def get_db_connection():
-    conn = sqlite3.connect("askely.db")
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# Création des tables si elles n'existent pas
+# --- DB SETUP ---
 def init_db():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS utilisateurs (
-            id TEXT PRIMARY KEY,
-            points INTEGER DEFAULT 0
-        )
-    ''')
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS evaluations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            utilisateur_id TEXT,
-            type TEXT,
-            nom TEXT,
-            date TEXT,
-            note INTEGER,
-            commentaire TEXT
-        )
-    ''')
+    conn = sqlite3.connect("askely.db")
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS utilisateurs (
+                    id TEXT PRIMARY KEY,
+                    points INTEGER DEFAULT 0
+                )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS evaluations (
+                    utilisateur_id TEXT,
+                    type TEXT,
+                    nom TEXT,
+                    date TEXT,
+                    note INTEGER,
+                    commentaire TEXT
+                )''')
     conn.commit()
     conn.close()
 
 init_db()
-# Calcul des points selon le type
-def get_points_for_type(eval_type):
-    if eval_type == "fidélité":
-        return 10
-    return 5
 
-# Ajout d'une évaluation
-def ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('''
-        INSERT INTO evaluations (utilisateur_id, type, nom, date, note, commentaire)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (utilisateur_id, eval_type, nom, date, note, commentaire))
-    cur.execute('''
-        INSERT OR IGNORE INTO utilisateurs (id, points) VALUES (?, 0)
-    ''', (utilisateur_id,))
-    cur.execute('''
-        UPDATE utilisateurs SET points = points + ? WHERE id = ?
-    ''', (get_points_for_type(eval_type), utilisateur_id))
+# --- UTILS ---
+def ajouter_utilisateur(utilisateur_id):
+    conn = sqlite3.connect("askely.db")
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO utilisateurs (id) VALUES (?)", (utilisateur_id,))
     conn.commit()
     conn.close()
 
-# Récupérer le profil utilisateur
+def ajouter_evaluation(utilisateur_id, type, nom, date, note, commentaire):
+    ajouter_utilisateur(utilisateur_id)
+    conn = sqlite3.connect("askely.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO evaluations VALUES (?, ?, ?, ?, ?, ?)", (utilisateur_id, type, nom, date, note, commentaire))
+    c.execute("UPDATE utilisateurs SET points = points + ? WHERE id = ?", (get_points_for_type(type), utilisateur_id))
+    conn.commit()
+    conn.close()
+
+def get_points_for_type(type):
+    return {"vol": 10, "hôtel": 7, "restaurant": 5, "fidélité": 10}.get(type, 0)
+
 def get_profil(utilisateur_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT points FROM utilisateurs WHERE id = ?", (utilisateur_id,))
-    row = cur.fetchone()
-    points = row["points"] if row else 0
-    cur.execute("SELECT * FROM evaluations WHERE utilisateur_id = ? ORDER BY id DESC LIMIT 5", (utilisateur_id,))
-    evaluations = cur.fetchall()
+    conn = sqlite3.connect("askely.db")
+    c = conn.cursor()
+    c.execute("SELECT points FROM utilisateurs WHERE id = ?", (utilisateur_id,))
+    points = c.fetchone()
+    points = points[0] if points else 0
+
+    c.execute("SELECT type, nom, date, note FROM evaluations WHERE utilisateur_id = ? ORDER BY rowid DESC LIMIT 5",
+(utilisateur_id,))
+    evaluations = [{"type": row[0], "nom": row[1], "date": row[2], "note": row[3]} for row in c.fetchall()]
     conn.close()
     return points, evaluations
-# Récupérer les derniers avis de la communauté
-def get_dernier_avis_communautaire():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    types = ["vol", "hôtel", "restaurant", "fidélité"]
-    avis = []
-    for t in types:
-        cur.execute("SELECT * FROM evaluations WHERE type = ? ORDER BY id DESC LIMIT 3", (t,))
-        rows = cur.fetchall()
-        avis.extend(rows)
-    conn.close()
-    return avis
 
-# Formater les étoiles
 def format_etoiles(note):
     return "⭐️" * int(note)
 
-# Construire la réponse WhatsApp d’accueil
-def menu_accueil():
-    return (
-        "👋 *Bienvenue chez Askely !*\n"
-        "Gagnez des points en évaluant vos expériences de voyage.\n\n"
-        "🗂️ *Menu d’évaluation :*\n"
-        "1️⃣ Évaluer un vol\n"
-        "2️⃣ Évaluer un programme de fidélité\n"
-        "3️⃣ Évaluer un hôtel\n"
-        "4️⃣ Évaluer un restaurant\n"
-        "5️⃣ Autre question\n"
-        "6️⃣ Mon profil\n"
-        "7️⃣ Voir tous les avis\n\n"
-        "📌 Tapez le *chiffre* correspondant à votre choix."
-    )
-# Construction de la réponse avis communauté
 def format_avis_communautaires():
-    avis = get_dernier_avis_communautaire()
-    if not avis:
-        return "Aucun avis trouvé pour le moment."
-    msg = "📋 *Voici les derniers avis de la communauté Askely :*\n\n"
-    for a in avis:
-        emoji = "✈️" if a["type"] == "vol" else "🏨" if a["type"] == "hôtel" else "🍽️" if a["type"] == "restaurant" else "🛂"
-        msg += f"{emoji} *{a['type'].capitalize()}* – {a['nom']} – {a['date']}\n{format_etoiles(a['note'])}\n\"{a['commentaire']}\"\n\n"
-    msg += "🔄 Envoie *mon profil* pour voir ton historique et tes points."
-    return msg
+    conn = sqlite3.connect("askely.db")
+    c = conn.cursor()
+    c.execute("SELECT type, nom, date, note FROM evaluations ORDER BY rowid DESC LIMIT 10")
+    evaluations = c.fetchall()
+    conn.close()
+    if not evaluations:
+        return "Aucun avis n’a encore été enregistré."
+    rep = "🗣️ Derniers avis de la communauté Askely : "
+    for e in evaluations:
+        rep += f"{e[0].capitalize()} – {e[1]} – {e[2]} : {format_etoiles(e[3])} "
+    return rep
 
-# Générer une réponse via GPT
-def reponse_gpt(message):
+def reponse_gpt(prompt):
     try:
         completion = openai.ChatCompletion.create(
             model="gpt-4o",
-            messages=[{"role": "system", "content": "Tu es un assistant de voyage utile."},
-                      {"role": "user", "content": message}],
-            max_tokens=100
+            messages=[{"role": "user", "content": prompt}]
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
-        return "❌ Erreur IA. Réessaye plus tard."
+        return "🤖 Erreur avec l’intelligence artificielle."
+
+def menu_accueil():
+    return (
+        "👋 Bienvenue sur Askely ! "
+        "Tu peux gagner des points à chaque avis déposé.  "
+        "✈️ Pour évaluer un vol → tape 1 "
+        "🛂 Pour évaluer un programme de fidélité → tape 2 "
+        "🏨 Pour évaluer un hôtel → tape 3 "
+        "🍽️ Pour évaluer un restaurant → tape 4 "
+        "👤 Pour voir ton profil → tape 6 "
+        "🗣️ Pour voir les avis → tape 7 "
+        "📌 Réponds avec le numéro de ton choix ou envoie directement ton avis au bon format."
+    )
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
     utilisateur_id = request.values.get("From", "")
     msg = MessagingResponse()
-    msg_txt = incoming_msg.lower()
+    response = msg.message()
 
-    if msg_txt in ["bonjour", "salut", "hello", "start", "menu"]:
-        msg.body(menu_accueil())
+    if incoming_msg.lower() in ["bonjour", "salut", "hello", "hi", "menu", "start"]:
+        response.body(menu_accueil())
         return str(msg)
 
-    if msg_txt == "1":
-        msg.body(
-            "✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\n"
-            "Nom de la compagnie\nDate du vol\nNuméro du vol\nNote sur 5\nCommentaire"
-        )
+    if incoming_msg == "1":
+        response.body("✈️
+        response.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vol\nNote sur 5\nTon commentaire")
         return str(msg)
-
-    if msg_txt == "2":
-        msg.body(
-            "🛂 Askely : Pour évaluer un programme de fidélité, envoie :\n\n"
-            "Nom du programme\nDate de l'expérience\nNote sur 5\nCommentaire"
-        )
+    elif incoming_msg == "2":
+        response.body("🛂 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\n\nNom du programme\nDate\nNote sur 5\nTon commentaire")
         return str(msg)
-
-    if msg_txt == "3":
-        msg.body(
-            "🏨 Askely : Pour évaluer un hôtel, envoie :\n\n"
-            "Nom de l'hôtel\nDate du séjour\nNote sur 5\nCommentaire"
-        )
+    elif incoming_msg == "3":
+        response.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\n\nNom de l’hôtel\nDate du séjour\nNote sur 5\nTon commentaire")
         return str(msg)
-
-    if msg_txt == "4":
-        msg.body(
-            "🍽️ Askely : Pour évaluer un restaurant, envoie :\n\n"
-            "Nom du restaurant\nDate de la visite\nNote sur 5\nCommentaire"
-        )
+    elif incoming_msg == "4":
+        response.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\n\nNom du restaurant\nDate\nNote sur 5\nTon commentaire")
         return str(msg)
-
-    if msg_txt == "6" or msg_txt == "mon profil":
+    elif incoming_msg == "6":
         points, evaluations = get_profil(utilisateur_id)
-        rep = f"👤 *Ton profil Askely*\nPoints : {points}\n\n📌 *Tes 5 dernières évaluations :*\n"
-        for e in evaluations:
-            rep += f"{e['type'].capitalize()} – {e['nom']} – {e['date']} : {format_etoiles(e['note'])}\n"
-        msg.body(rep)
+        if evaluations:
+            texte = f"👤 Ton profil Askely\nPoints : {points} 🪙\n\n📝 Tes 5 dernières évaluations :\n"
+            for e in evaluations:
+                texte += f"- {e['type'].capitalize()} – {e['nom']} – {e['date']} : {format_etoiles(e['note'])}\n"
+        else:
+            texte = f"👤 Ton profil Askely\nPoints : {points} 🪙\nAucune évaluation enregistrée pour l’instant."
+        response.body(texte)
+        return str(msg)
+    elif incoming_msg == "7":
+        response.body(format_avis_communautaires())
         return str(msg)
 
-    if msg_txt == "7" or "avis" in msg_txt:
-        msg.body(format_avis_communautaires())
-        return str(msg)
     # Tentative d'analyse automatique
     lignes = incoming_msg.split("\n")
     if len(lignes) >= 4:
@@ -193,7 +152,6 @@ def webhook():
             eval_type = "fidélité"
         else:
             eval_type = None
-
         if eval_type:
             try:
                 nom = lignes[0]
@@ -201,15 +159,15 @@ def webhook():
                 note = int(lignes[2])
                 commentaire = "\n".join(lignes[3:])
                 ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
-                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
+                response.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️. +{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(msg)
             except:
-                msg.body("❌ Format invalide. Vérifie que tu envoies bien :\nNom\nDate\nNote (1-5)\nCommentaire")
+                response.body("❌ Format invalide. Vérifie que tu envoies bien :\nNom\nDate\nNote (1-5)\nCommentaire")
                 return str(msg)
 
-    # Sinon → GPT
+    # Sinon, GPT
     rep = reponse_gpt(incoming_msg)
-    msg.body(rep)
+    response.body(rep)
     return str(msg)
 
 if __name__ == "__main__":
