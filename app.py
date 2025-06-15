@@ -69,8 +69,8 @@ def webhook():
         msg.body(menu_principal())
         return str(response)
     if msg_txt == "1":
-        msg.body("✈️ Pour évaluer un vol, envoie : Compagnie, Numéro de vol, Date, Note (1-5), Commentaire")
-    elif msg_txt.startswith("Compagnie"):
+        msg.body("✈️ Pour évaluer un vol, envoie :\nCompagnie, Numéro de vol, Date, Note (1-5), Commentaire")
+    elif msg_txt.lower().startswith("compagnie"):
         parts = msg_txt.split(",")
         if len(parts) >= 5:
             compagnie, numero_vol, date, note, commentaire = [p.strip() for p in parts]
@@ -81,16 +81,12 @@ def webhook():
             msg.body("✅ Merci pour ton avis sur ce vol. Tu gagnes 10 points Askely 🪙")
 
     elif msg_txt == "2":
-        msg.body("🛂 Pour évaluer un programme de fidélité, envoie : Programme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
-    elif msg_txt.startswith("Programme"):
-        parts = msg_txt.split(",")
-        if len(parts) >= 6:
-            programme, compagnie, acc, util, adv, commentaire = [p.strip() for p in parts]
-            cur.execute("INSERT INTO evaluations_fidelite (programme, compagnie, note_accumulation, note_utilisation, note_avantages, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (programme, compagnie, int(acc), int(util), int(adv), commentaire,
+        msg.body("🛂 Pour évaluer un programme de fidélité, envoie :\nProgramme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
+    elif msg_txt.lower().startswith("programme"):
+        parts = msg_txt.split_
     elif msg_txt == "3":
-        msg.body("🏨 Pour évaluer un hôtel, envoie : Nom, Ville, Date, Note (1-5), Commentaire")
-    elif msg_txt.startswith("Nom hôtel"):
+        msg.body("🏨 Pour évaluer un hôtel, envoie :\nNom hôtel, Ville, Date, Note (1-5), Commentaire")
+    elif msg_txt.lower().startswith("nom hôtel") or msg_txt.lower().startswith("nom hotel"):
         parts = msg_txt.split(",")
         if len(parts) >= 5:
             nom, ville, date, note, commentaire = [p.strip() for p in parts]
@@ -101,16 +97,14 @@ def webhook():
             msg.body("🏨 Merci pour ton avis sur cet hôtel. Tu gagnes 7 points Askely 🪙")
 
     elif msg_txt == "4":
-        msg.body("🍽️ Pour évaluer un restaurant, envoie : Nom, Ville, Date, Note (1-5), Commentaire")
-    elif msg_txt.startswith("Nom restaurant"):
+        msg.body("🍽️ Pour évaluer un restaurant, envoie :\nNom restaurant, Ville, Date, Note (1-5), Commentaire")
+    elif msg_txt.lower().startswith("nom restaurant"):
         parts = msg_txt.split(",")
         if len(parts) >= 5:
             nom, ville, date, note, commentaire = [p.strip() for p in parts]
             cur.execute("INSERT INTO evaluations_restaurant (nom_restaurant, ville, date, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
                         (nom, ville, date, int(note), commentaire, user_number))
-            cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_number,))
-            conn.commit()
-            msg.body("🍽️ Merci pour ton avis sur ce restaurant. Tu gagnes 5 points Askely 🪙")
+            cur.execute("UPDATE utilisateurs SET points = points
     elif msg_txt == "5":
         profil = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,)).fetchone()
         vols = cur.execute("SELECT * FROM evaluations_vol WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
@@ -126,7 +120,10 @@ def webhook():
         for r in restos:
             msg_txt += f"\n🍽️ {r['nom_restaurant']} ({r['ville']}) - Note {r['note']}/5"
         for f in fid:
-            msg_txt += f"\n🛂 {f['progra]()_
+            moyenne = (f['note_accumulation'] + f['note_utilisation'] + f['note_avantages']) // 3
+            msg_txt += f"\n🛂 {f['programme']} - Moyenne {moyenne}/5"
+
+        msg.body(msg_txt)
     else:
         gpt_response = ask_gpt(msg_txt)
         msg.body("🤖 Réponse IA :\n" + gpt_response)
@@ -147,6 +144,4 @@ def menu_principal():
     )
 
 if __name__ == "__main__":
-    init_db()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    init_db(_
