@@ -33,6 +33,7 @@ def init_db():
     cur.execute("CREATE TABLE IF NOT EXISTS evaluations_restaurant (id INTEGER PRIMARY KEY AUTOINCREMENT, nom_restaurant TEXT, ville TEXT, date TEXT, note INTEGER, commentaire TEXT, user_id TEXT)")
     conn.commit()
     conn.close()
+
 @app.route("/", methods=["GET"])
 def home():
     return "✅ Askely agent est en ligne"
@@ -69,6 +70,7 @@ def webhook():
         conn.commit()
         msg.body(menu_principal())
         return str(response)
+
     if msg_txt == "1":
         msg.body("✈️ Pour évaluer un vol, envoie :\nCompagnie, Numéro de vol, Date, Note (1-5), Commentaire")
     elif msg_txt.lower().startswith("compagnie"):
@@ -86,7 +88,13 @@ def webhook():
     elif msg_txt.lower().startswith("programme"):
         parts = msg_txt.split(",")
         if len(parts) >= 6:
-            programme,
+            programme, compagnie, acc, util, adv, commentaire = [p.strip() for p in parts]
+            cur.execute("INSERT INTO evaluations_fidelite (programme, compagnie, note_accumulation, note_utilisation, note_avantages, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (programme, compagnie, int(acc), int(util), int(adv), commentaire, user_number))
+            cur.execute("UPDATE utilisateurs SET points = points + 6 WHERE id = ?", (user_number,))
+            conn.commit()
+            msg.body("🛂 Merci pour ton retour sur ce programme. Tu gagnes 6 points Askely 🪙")
+
     elif msg_txt == "3":
         msg.body("🏨 Pour évaluer un hôtel, envoie :\nNom hôtel, Ville, Date, Note (1-5), Commentaire")
     elif msg_txt.lower().startswith("nom hôtel") or msg_txt.lower().startswith("nom hotel"):
@@ -110,6 +118,7 @@ def webhook():
             cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_number,))
             conn.commit()
             msg.body("🍽️ Merci pour ton retour sur ce restaurant. Tu gagnes 5 points Askely 🪙")
+
     elif msg_txt == "5":
         profil = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,)).fetchone()
         vols = cur.execute("SELECT * FROM evaluations_vol WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
@@ -127,8 +136,8 @@ def webhook():
         for f in fid:
             moyenne = (f['note_accumulation'] + f['note_utilisation'] + f['note_avantages']) // 3
             msg_txt += f"\n🛂 {f['programme']} - Moyenne {moyenne}/5"
-
         msg.body(msg_txt)
+
     else:
         gpt_response = ask_gpt(msg_txt)
         msg.body("🤖 Réponse IA :\n" + gpt_response)
@@ -138,14 +147,16 @@ def webhook():
 
 def menu_principal():
     return (
-        "👋 Bienvenue sur Askely 🌍\n"
-        "Gagne des points en évaluant tes expériences ✈️🏨🍽️🛂\n\n"
-        "1️⃣ Évaluer un vol\n"
-        "2️⃣ Évaluer un programme de fidélité\n"
-        "3️⃣ Évaluer un hôtel\n"
-        "4️⃣ Évaluer un restaurant\n"
-        "5️⃣ Mon profil\n\n"
-        "📌 Réponds avec le numéro de ton choix ou pose ta question librement 🤖"
+        "👋 Bienvenue sur Askely – Ton assistant de voyage intelligent 🌍\n"
+        "Évalue tes expériences et gagne des points 🎁\n\n"
+        "✏️ Tape le chiffre correspondant à ton choix :\n\n"
+        "1️⃣ Évaluer un vol ✈️\n"
+        "2️⃣ Évaluer un programme de fidélité 🛂\n"
+        "3️⃣ Évaluer un hôtel 🏨\n"
+        "4️⃣ Évaluer un restaurant 🍽️\n"
+        "5️⃣ Voir mon profil 👤\n\n"
+        "💬 Ou pose une question libre (ex : météo, réservation, info pays...)\n\n"
+        "📌 Envoie simplement le chiffre de ton choix pour commencer !"
     )
 
 if __name__ == "__main__":
