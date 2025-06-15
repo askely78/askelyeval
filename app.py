@@ -64,7 +64,8 @@ def webhook():
 
     user = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,)).fetchone()
     if not user:
-        cur.execute("INSERT INTO utilisateurs (id, pseudo, numero_hash, points) VALUES (?, ?, ?, ?)", (user_number, f"user_{user_number[-4:]}", user_number, 0))
+        cur.execute("INSERT INTO utilisateurs (id, pseudo, numero_hash, points) VALUES (?, ?, ?, ?)",
+                    (user_number, f"user_{user_number[-4:]}", user_number, 0))
         conn.commit()
         msg.body(menu_principal())
         return str(response)
@@ -83,7 +84,9 @@ def webhook():
     elif msg_txt == "2":
         msg.body("🛂 Pour évaluer un programme de fidélité, envoie :\nProgramme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
     elif msg_txt.lower().startswith("programme"):
-        parts = msg_txt.split_
+        parts = msg_txt.split(",")
+        if len(parts) >= 6:
+            programme,
     elif msg_txt == "3":
         msg.body("🏨 Pour évaluer un hôtel, envoie :\nNom hôtel, Ville, Date, Note (1-5), Commentaire")
     elif msg_txt.lower().startswith("nom hôtel") or msg_txt.lower().startswith("nom hotel"):
@@ -94,7 +97,7 @@ def webhook():
                         (nom, ville, date, int(note), commentaire, user_number))
             cur.execute("UPDATE utilisateurs SET points = points + 7 WHERE id = ?", (user_number,))
             conn.commit()
-            msg.body("🏨 Merci pour ton avis sur cet hôtel. Tu gagnes 7 points Askely 🪙")
+            msg.body("🏨 Merci pour ton retour sur cet hôtel. Tu gagnes 7 points Askely 🪙")
 
     elif msg_txt == "4":
         msg.body("🍽️ Pour évaluer un restaurant, envoie :\nNom restaurant, Ville, Date, Note (1-5), Commentaire")
@@ -104,7 +107,9 @@ def webhook():
             nom, ville, date, note, commentaire = [p.strip() for p in parts]
             cur.execute("INSERT INTO evaluations_restaurant (nom_restaurant, ville, date, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
                         (nom, ville, date, int(note), commentaire, user_number))
-            cur.execute("UPDATE utilisateurs SET points = points
+            cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_number,))
+            conn.commit()
+            msg.body("🍽️ Merci pour ton retour sur ce restaurant. Tu gagnes 5 points Askely 🪙")
     elif msg_txt == "5":
         profil = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,)).fetchone()
         vols = cur.execute("SELECT * FROM evaluations_vol WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
@@ -144,4 +149,6 @@ def menu_principal():
     )
 
 if __name__ == "__main__":
-    init_db(_
+    init_db()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
