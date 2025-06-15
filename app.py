@@ -6,14 +6,13 @@ import os
 
 app = Flask(__name__)
 
-ADMINS = [os.getenv('ADMIN_NUM')]  # Numéro admin à configurer dans Render
+ADMINS = [os.getenv('ADMIN_NUM')]  # À définir dans Render
 
 def get_db_connection():
     conn = sqlite3.connect('askely.db')
     conn.row_factory = sqlite3.Row
     return conn
 
-# Créer automatiquement la base si elle n'existe pas
 def init_sqlite_db():
     if not os.path.exists('askely.db'):
         with open('init_db.sql', 'r') as f:
@@ -34,7 +33,6 @@ def webhook():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Vérifie si l'utilisateur existe
     user_id = user_number
     cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_id,))
     if not cur.fetchone():
@@ -42,7 +40,6 @@ def webhook():
                     (user_id, f"user_{user_number[-4:]}", user_number, 0))
         conn.commit()
 
-    # Interface Admin
     if user_number in ADMINS:
         if incoming_msg == "admin stats":
             nb_users = cur.execute("SELECT COUNT(*) FROM utilisateurs").fetchone()[0]
@@ -82,15 +79,38 @@ def webhook():
                 "- admin avis [nom programme]"
             )
     else:
-        # Utilisateur classique
-        if incoming_msg.startswith("2"):
+        if incoming_msg == "avis":
+            rows = cur.execute("""
+                SELECT commentaire, date FROM evaluations_fidelite
+                ORDER BY date DESC LIMIT 5
+            """).fetchall()
+            if rows:
+                reply = "🗂️ 5 derniers avis déposés :\n" + "\n".join(
+                    [f"- {row['commentaire']} ({row['date'][:10]})" for row in rows])
+            else:
+                reply = "Aucun avis enregistré pour l’instant."
+        elif incoming_msg.startswith("1"):
             reply = (
-                "✈️ Évaluation d’un programme de fidélité\n"
-                "Merci de me donner les infos suivantes séparées par des virgules :\n"
-                "**Nom du programme, compagnie, note accumulation (1-5), note utilisation (1-5), note avantages (1-5), commentaire**\n"
-                "Exemple : Safar Flyer, Royal Air Maroc, 4, 3, 5, Bons avantages mais peu de partenaires"
+                "🛫 Évaluation de vol\n"
+                "Merci d’envoyer :\n"
+                "**Nom compagnie, numéro vol, date, note (1-5), commentaire**"
             )
-        elif "," in incoming_msg:
+        elif incoming_msg.startswith("2"):
+            reply = (
+                "🛂 Évaluation de programme de fidélité\n"
+                "**Nom du programme, compagnie, note accumulation, note utilisation, note avantages, commentaire**"
+            )
+        elif incoming_msg.startswith("3"):
+            reply = (
+                "🏨 Évaluation d’hôtel\n"
+                "**Nom de l’hôtel, ville, date, note (1-5), commentaire**"
+            )
+        elif incoming_msg.startswith("4"):
+            reply = (
+                "🍽️ Évaluation de restaurant\n"
+                "**Nom restaurant, ville, date, note (1-5), commentaire**"
+            )
+        elif len(incoming_msg.split(",")) >= 5:
             parts = [x.strip() for x in incoming_msg.split(',')]
             if len(parts) >= 6:
                 programme, compagnie, n1, n2, n3, commentaire = parts[:6]
@@ -113,7 +133,13 @@ def webhook():
         else:
             reply = (
                 "👋 Bienvenue sur Askely !\n"
-                "Tape `2` pour évaluer un programme de fidélité ✈️"
+                "Voici ce que tu peux faire 👇\n\n"
+                "1️⃣ Évaluer un vol ✈️\n"
+                "2️⃣ Évaluer un programme de fidélité 🛂\n"
+                "3️⃣ Évaluer un hôtel 🏨\n"
+                "4️⃣ Évaluer un restaurant 🍽️\n"
+                "5️⃣ Autre demande ou aide 🤖\n\n"
+                "Tape simplement le chiffre correspondant pour commencer."
             )
 
     conn.close()
@@ -121,7 +147,23 @@ def webhook():
     resp.message(reply)
     return str(resp)
 
-# Écoute dynamique pour Render
+@app.route('/avis')
+def public_avis():
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT e.commentaire, e.date, u.pseudo, p.nom_programme, p.compagnie
+        FROM evaluations_fidelite e
+        JOIN utilisateurs u ON u.id = e.user_id
+        JOIN programmes_fidelite p ON p.id = e.programme_id
+        ORDER BY e.date DESC
+    """).fetchall()
+    conn.close()
+    avis_html = "<h1>🗂️ Avis Askely</h1><ul>"
+    for row in rows:
+        avis_html += f"<li><b>{row['pseudo']}</b> sur <i>{row['nom_programme']} ({row['compagnie']})</i> : {row['commentaire']} ({row['date'][:10]})</li>"
+    avis_html += "</ul>"
+    return avis_html
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
