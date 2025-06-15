@@ -2,6 +2,9 @@ from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
 import os
+import openai
+
+openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 app = Flask(__name__)
 
@@ -9,48 +12,65 @@ def get_db_connection():
     conn = sqlite3.connect('askely.db')
     conn.row_factory = sqlite3.Row
     return conn
+
+def ask_gpt(prompt):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
+        )
+        return response['choices'][0]['message']['content'].strip()
+    except Exception:
+        return "Désolé, une erreur est survenue avec l'intelligence artificielle."
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
+
     cur.execute('''CREATE TABLE IF NOT EXISTS utilisateurs (
-                    id TEXT PRIMARY KEY,
-                    pseudo TEXT,
-                    numero_hash TEXT,
-                    points INTEGER DEFAULT 0
-                )''')
+        id TEXT PRIMARY KEY,
+        pseudo TEXT,
+        numero_hash TEXT,
+        points INTEGER DEFAULT 0
+    )''')
+
     cur.execute('''CREATE TABLE IF NOT EXISTS evaluations_fidelite (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    programme_id INTEGER,
-                    user_id TEXT,
-                    note_accumulation INTEGER,
-                    note_utilisation INTEGER,
-                    note_avantages INTEGER,
-                    commentaire TEXT,
-                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )''')
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        programme_id INTEGER,
+        user_id TEXT,
+        note_accumulation INTEGER,
+        note_utilisation INTEGER,
+        note_avantages INTEGER,
+        commentaire TEXT,
+        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
     cur.execute('''CREATE TABLE IF NOT EXISTS programmes_fidelite (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nom_programme TEXT,
-                    compagnie TEXT
-                )''')
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nom_programme TEXT,
+        compagnie TEXT
+    )''')
+
     cur.execute('''CREATE TABLE IF NOT EXISTS evaluations_restaurant (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nom_restaurant TEXT,
-                    ville TEXT,
-                    date TEXT,
-                    note INTEGER,
-                    commentaire TEXT,
-                    user_id TEXT
-                )''')
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nom_restaurant TEXT,
+        ville TEXT,
+        date TEXT,
+        note INTEGER,
+        commentaire TEXT,
+        user_id TEXT
+    )''')
+
     cur.execute('''CREATE TABLE IF NOT EXISTS evaluations_hotel (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nom_hotel TEXT,
-                    ville TEXT,
-                    date TEXT,
-                    note INTEGER,
-                    commentaire TEXT,
-                    user_id TEXT
-                )''')
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nom_hotel TEXT,
+        ville TEXT,
+        date TEXT,
+        note INTEGER,
+        commentaire TEXT,
+        user_id TEXT
+    )''')
+
     conn.commit()
     conn.close()
 
@@ -75,13 +95,17 @@ def webhook():
         cur.execute("INSERT INTO utilisateurs (id, pseudo, numero_hash, points) VALUES (?, ?, ?, ?)",
                     (user_id, f"user_{user_number[-4:]}", user_number, 0))
         conn.commit()
-        msg.body("👋 Bienvenue sur Askely, ton concierge de voyage intelligent 🌍\n"
-                 "Tu peux évaluer :\n"
-                 "1️⃣ Un vol ✈️\n"
-                 "2️⃣ Un programme de fidélité 🛂\n"
-                 "3️⃣ Un hôtel 🏨\n"
-                 "4️⃣ Un restaurant 🍽️\n"
-                 "5️⃣ Mon profil 👤")
+        msg.body("👋 Bienvenue sur Askely, ton assistant de voyage intelligent 🌍\n"
+                 "Gagne des points à chaque avis ✨\n\n"
+                 "Voici ce que tu peux faire :\n\n"
+                 "✈️ Pour évaluer un vol → tape 1\n"
+                 "🛂 Pour évaluer un programme de fidélité → tape 2\n"
+                 "🏨 Pour évaluer un hôtel → tape 3\n"
+                 "🍽️ Pour évaluer un restaurant → tape 4\n"
+                 "👤 Pour consulter ton profil → tape 5\n"
+                 "🤖 Pour poser une question libre (visa, vol, conseil…) → écris ta question directement\n\n"
+                 "🪙 Chaque évaluation te fait gagner des points Askely 🎁\n"
+                 "📌 Réponds avec le numéro de ton choix ou pose ta question !")
         return str(response)
     if incoming_msg == "menu":
         msg.body("📋 Menu Askely :\n"
@@ -90,6 +114,7 @@ def webhook():
                  "3️⃣ Évaluer un hôtel 🏨\n"
                  "4️⃣ Évaluer un restaurant 🍽️\n"
                  "5️⃣ Mon profil 👤")
+
     elif incoming_msg == "5":
         row = cur.execute("SELECT pseudo, points FROM utilisateurs WHERE id = ?", (user_id,)).fetchone()
         total_avis_fidelite = cur.execute("SELECT COUNT(*) FROM evaluations_fidelite WHERE user_id = ?", (user_id,)).fetchone()[0]
@@ -142,7 +167,7 @@ def webhook():
 
     elif incoming_msg.startswith("2"):
         msg.body("🛂 Merci ! Envoie :\nNom du programme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
-        # Traitement à ajouter si nécessaire
+        # À compléter si souhaité : insertion en base
 
     elif incoming_msg.startswith("3"):
         parts = [x.strip() for x in incoming_msg.split(',')]
@@ -172,7 +197,8 @@ def webhook():
         else:
             msg.body("🍽️ Pour évaluer un restaurant, envoie :\nNom, Ville, Date, Note (1 à 5), Commentaire")
     else:
-        msg.body("❓ Je n’ai pas compris. Envoie 'menu' pour voir les options disponibles.")
+        gpt_response = ask_gpt(incoming_msg)
+        msg.body(f"🤖 Réponse IA :\n{gpt_response}")
 
     conn.close()
     return str(response)
