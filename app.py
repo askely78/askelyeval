@@ -21,7 +21,7 @@ def ask_gpt(prompt):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        return "❌ Erreur IA : " + str(e)
+        return "Askely 🤖 : Erreur IA – " + str(e)
 
 def init_db():
     conn = get_db_connection()
@@ -33,92 +33,43 @@ def init_db():
     cur.execute("CREATE TABLE IF NOT EXISTS evaluations_restaurant (id INTEGER PRIMARY KEY AUTOINCREMENT, nom_restaurant TEXT, ville TEXT, date TEXT, note INTEGER, commentaire TEXT, user_id TEXT)")
     conn.commit()
     conn.close()
-
-@app.route("/", methods=["GET"])
-def home():
-    return "✅ Askely agent est en ligne"
-
-@app.route("/avis", methods=["GET"])
-def afficher_avis():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    vols = cur.execute("SELECT * FROM evaluations_vol ORDER BY id DESC LIMIT 10").fetchall()
-    hotels = cur.execute("SELECT * FROM evaluations_hotel ORDER BY id DESC LIMIT 10").fetchall()
-    restos = cur.execute("SELECT * FROM evaluations_restaurant ORDER BY id DESC LIMIT 10").fetchall()
-    fid = cur.execute("SELECT * FROM evaluations_fidelite ORDER BY id DESC LIMIT 10").fetchall()
-    conn.close()
-    return jsonify({
-        "vols": [dict(x) for x in vols],
-        "hotels": [dict(x) for x in hotels],
-        "restaurants": [dict(x) for x in restos],
-        "fidelite": [dict(x) for x in fid],
-    })
-
-@app.route("/webhook", methods=["POST"])
+@app.route("/", methods=["GET", "POST"])
 def webhook():
-    msg_txt = request.values.get("Body", "").strip()
-    user_number = request.values.get("From", "").replace("whatsapp:", "")
     response = MessagingResponse()
     msg = response.message()
+    user_number = request.form.get("From", "").replace("whatsapp:", "")
+    incoming_msg = request.form.get("Body", "").strip()
+
     conn = get_db_connection()
     cur = conn.cursor()
 
-    user = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,)).fetchone()
+    # Crée ou récupère l'utilisateur
+    cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,))
+    user = cur.fetchone()
     if not user:
-        cur.execute("INSERT INTO utilisateurs (id, pseudo, numero_hash, points) VALUES (?, ?, ?, ?)",
-                    (user_number, f"user_{user_number[-4:]}", user_number, 0))
+        cur.execute("INSERT INTO utilisateurs (id, pseudo, points) VALUES (?, ?, ?)", (user_number, f"User-{user_number[-4:]}", 0))
         conn.commit()
         msg.body(menu_principal())
+        conn.close()
         return str(response)
 
+    # Menu d’accueil
+    if incoming_msg.lower() in ["menu", "bonjour", "salut", "hi", "start", "askely"]:
+        msg.body(menu_principal())
+        conn.close()
+        return str(response)
+
+    # Traitement des options
+    msg_txt = incoming_msg.lower()
+
     if msg_txt == "1":
-        msg.body("✈️ Pour évaluer un vol, envoie :\nCompagnie, Numéro de vol, Date, Note (1-5), Commentaire")
-    elif msg_txt.lower().startswith("compagnie"):
-        parts = msg_txt.split(",")
-        if len(parts) >= 5:
-            compagnie, numero_vol, date, note, commentaire = [p.strip() for p in parts]
-            cur.execute("INSERT INTO evaluations_vol (compagnie, numero_vol, date_vol, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
-                        (compagnie, numero_vol, date, int(note), commentaire, user_number))
-            cur.execute("UPDATE utilisateurs SET points = points + 10 WHERE id = ?", (user_number,))
-            conn.commit()
-            msg.body("✅ Merci pour ton avis sur ce vol. Tu gagnes 10 points Askely 🪙")
-
-    elif msg_txt == "2":
-        msg.body("🛂 Pour évaluer un programme de fidélité, envoie :\nProgramme, Compagnie, Note accumulation, Note utilisation, Note avantages, Commentaire")
-    elif msg_txt.lower().startswith("programme"):
-        parts = msg_txt.split(",")
-        if len(parts) >= 6:
-            programme, compagnie, acc, util, adv, commentaire = [p.strip() for p in parts]
-            cur.execute("INSERT INTO evaluations_fidelite (programme, compagnie, note_accumulation, note_utilisation, note_avantages, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (programme, compagnie, int(acc), int(util), int(adv), commentaire, user_number))
-            cur.execute("UPDATE utilisateurs SET points = points + 6 WHERE id = ?", (user_number,))
-            conn.commit()
-            msg.body("🛂 Merci pour ton retour sur ce programme. Tu gagnes 6 points Askely 🪙")
-
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vo
     elif msg_txt == "3":
-        msg.body("🏨 Pour évaluer un hôtel, envoie :\nNom hôtel, Ville, Date, Note (1-5), Commentaire")
-    elif msg_txt.lower().startswith("nom hôtel") or msg_txt.lower().startswith("nom hotel"):
-        parts = msg_txt.split(",")
-        if len(parts) >= 5:
-            nom, ville, date, note, commentaire = [p.strip() for p in parts]
-            cur.execute("INSERT INTO evaluations_hotel (nom_hotel, ville, date, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
-                        (nom, ville, date, int(note), commentaire, user_number))
-            cur.execute("UPDATE utilisateurs SET points = points + 7 WHERE id = ?", (user_number,))
-            conn.commit()
-            msg.body("🏨 Merci pour ton retour sur cet hôtel. Tu gagnes 7 points Askely 🪙")
-
+        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos :\n\nNom de l’hôtel\nVille\nDate du séjour\nNote (1-5)\nCommentaire")
+        return str(response)
     elif msg_txt == "4":
-        msg.body("🍽️ Pour évaluer un restaurant, envoie :\nNom restaurant, Ville, Date, Note (1-5), Commentaire")
-    elif msg_txt.lower().startswith("nom restaurant"):
-        parts = msg_txt.split(",")
-        if len(parts) >= 5:
-            nom, ville, date, note, commentaire = [p.strip() for p in parts]
-            cur.execute("INSERT INTO evaluations_restaurant (nom_restaurant, ville, date, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
-                        (nom, ville, date, int(note), commentaire, user_number))
-            cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_number,))
-            conn.commit()
-            msg.body("🍽️ Merci pour ton retour sur ce restaurant. Tu gagnes 5 points Askely 🪙")
-
+        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos :\n\nNom du restaurant\nVille\nDate de visite\nNote (1-5)\nCommentaire")
+        return str(response)
     elif msg_txt == "5":
         profil = cur.execute("SELECT * FROM utilisateurs WHERE id = ?", (user_number,)).fetchone()
         vols = cur.execute("SELECT * FROM evaluations_vol WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
@@ -126,7 +77,7 @@ def webhook():
         restos = cur.execute("SELECT * FROM evaluations_restaurant WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
         fid = cur.execute("SELECT * FROM evaluations_fidelite WHERE user_id = ? ORDER BY id DESC LIMIT 3", (user_number,)).fetchall()
 
-        msg_txt = f"👤 Ton profil Askely :\nPseudo : {profil['pseudo']}\nPoints : {profil['points']} 🪙\n\n🕓 Derniers avis :"
+        msg_txt = f"👤 Askely – Ton profil :\nPseudo : {profil['pseudo']}\nPoints : {profil['points']} 🪙\n\n🕓 Derniers avis :"
         for v in vols:
             msg_txt += f"\n✈️ {v['compagnie']} {v['numero_vol']} - Note {v['note']}/5"
         for h in hotels:
@@ -136,13 +87,75 @@ def webhook():
         for f in fid:
             moyenne = (f['note_accumulation'] + f['note_utilisation'] + f['note_avantages']) // 3
             msg_txt += f"\n🛂 {f['programme']} - Moyenne {moyenne}/5"
-        msg.body(msg_txt)
 
-    else:
-        gpt_response = ask_gpt(msg_txt)
-        msg.body("🤖 Réponse IA :\n" + gpt_response)
+        msg.body(msg_txt)
+        conn.close()
+        return str(response)
+    try:
+        # Évaluation vol
+        if incoming_msg.count("\n") >= 4 and "compagnie" not in incoming_msg.lower():
+            lignes = incoming_msg.split("\n")
+            if len(lignes) == 5:
+                compagnie, date_vol, numero_vol, note, commentaire = lignes
+                cur.execute("INSERT INTO evaluations_vol (compagnie, date_vol, numero_vol, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+                            (compagnie.strip(), date_vol.strip(), numero_vol.strip(), int(note), commentaire.strip(), user_number))
+                cur.execute("UPDATE utilisateurs SET points = points + 10 WHERE id = ?", (user_number,))
+                conn.commit()
+                msg.body("✈️ Askely : Merci pour ton avis sur ce vol. Tu gagnes 10 points 🪙")
+                conn.close()
+                return str(response)
+
+        # Évaluation fidélité
+        if incoming_msg.count("\n") >= 6 and "programme" in incoming_msg.lower():
+            lignes = incoming_msg.split("\n")
+            if len(lignes) >= 6:
+                programme, compagnie, acc, uti, ava, commentaire = lignes[:6]
+                cur.execute("INSERT INTO evaluations_fidelite (programme, compagnie, note_accumulation, note_utilisation, note_avantages, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (programme.strip(), compagnie.strip(), int(acc), int(uti), int(ava), commentaire.strip(), user_number))
+                cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_number,))
+                conn.commit()
+                msg.body("🛂 Askely : Merci pour ton évaluation du programme de fidélité. Tu gagnes 5 points 🪙")
+                conn.close()
+                return str(response)
+        # Évaluation hôtel
+        if incoming_msg.count("\n") >= 4 and "hôtel" in incoming_msg.lower() or "hotel" in incoming_msg.lower():
+            lignes = incoming_msg.split("\n")
+            if len(lignes) == 5:
+                nom, ville, date, note, commentaire = lignes
+                cur.execute("INSERT INTO evaluations_hotel (nom_hotel, ville, date, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+                            (nom.strip(), ville.strip(), date.strip(), int(note), commentaire.strip(), user_number))
+                cur.execute("UPDATE utilisateurs SET points = points + 7 WHERE id = ?", (user_number,))
+                conn.commit()
+                msg.body("🏨 Askely : Merci pour ton avis sur cet hôtel. Tu gagnes 7 points 🪙")
+                conn.close()
+                return str(response)
+
+        # Évaluation restaurant
+        if incoming_msg.count("\n") >= 4 and "restaurant" in incoming_msg.lower():
+            lignes = incoming_msg.split("\n")
+            if len(lignes) == 5:
+                nom, ville, date, note, commentaire = lignes
+                cur.execute("INSERT INTO evaluations_restaurant (nom_restaurant, ville, date, note, commentaire, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+                            (nom.strip(), ville.strip(), date.strip(), int(note), commentaire.strip(), user_number))
+                cur.execute("UPDATE utilisateurs SET points = points + 5 WHERE id = ?", (user_number,))
+                conn.commit()
+                msg.body("🍽️ Askely : Merci pour ton avis sur ce restaurant. Tu gagnes 5 points 🪙")
+                conn.close()
+                return str(response)
+        # Question libre → GPT
+        if incoming_msg:
+            gpt_response = ask_gpt(incoming_msg)
+            msg.body("🤖 Askely : " + gpt_response)
+            conn.close()
+            return str(response)
+
+    except Exception as e:
+        msg.body("❌ Askely : Une erreur est survenue : " + str(e))
+        conn.close()
+        return str(response)
 
     conn.close()
+    msg.body("❓ Askely : Je n’ai pas compris. Envoie un chiffre (1 à 5) ou ta question.")
     return str(response)
 
 def menu_principal():
@@ -161,5 +174,4 @@ def menu_principal():
 
 if __name__ == "__main__":
     init_db()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    port =
