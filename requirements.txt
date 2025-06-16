@@ -1,7 +1,5 @@
 
-flask
-twilio
-flask
-twilio
-openai==0.28.0
+flask>=2.0.0
+twilio>=7.0.0
+openai>=0.27.0
 
