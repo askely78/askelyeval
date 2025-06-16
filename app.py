@@ -1,12 +1,12 @@
+
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
 import os
-import openai
+from openai import OpenAI
 
 app = Flask(__name__)
-
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI()
 
 def creer_table():
     conn = sqlite3.connect("askely.db")
@@ -57,7 +57,7 @@ def format_etoiles(note):
 
 def reponse_gpt(texte):
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
@@ -66,8 +66,7 @@ def reponse_gpt(texte):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print("❌ Erreur OpenAI :", e)
-        return f"❌ Une erreur est survenue : {e}"
+        return f"❌ Erreur GPT : {e}"
 
 creer_table()
 
@@ -129,45 +128,49 @@ def webhook():
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\\n\\nNom de la compagnie\\nDate du vol\\nNote sur 5\\nTon commentaire")
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vol\nNote sur 5\nTon commentaire")
         return str(response)
 
     if incoming_msg == "2":
-        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\\n\\nNom du programme (ex : Skywards)\\nDate de ton expérience\\nNote sur 5\\nTon commentaire")
+        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\n\nNom du programme (ex : Skywards)\nDate de ton expérience\nNote sur 5\nTon commentaire")
         return str(response)
 
     if incoming_msg == "3":
-        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\\n\\nNom de l'hôtel\\nDate de ton séjour\\nNote sur 5\\nTon commentaire")
+        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\n\nNom de l'hôtel\nDate de ton séjour\nNote sur 5\nTon commentaire")
         return str(response)
 
     if incoming_msg == "4":
-        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\\n\\nNom du restaurant\\nDate de ta visite\\nNote sur 5\\nTon commentaire")
+        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\n\nNom du restaurant\nDate de ta visite\nNote sur 5\nTon commentaire")
         return str(response)
 
-    lignes = incoming_msg.split("\\n")
+    lignes = incoming_msg.split("\n")
     if len(lignes) >= 4:
-        if "vol" in lignes[0].lower():
-            eval_type = "vol"
-        elif "hôtel" in lignes[0].lower() or "hotel" in lignes[0].lower():
-            eval_type = "hôtel"
-        elif "restaurant" in lignes[0].lower():
-            eval_type = "restaurant"
-        elif "skywards" in lignes[0].lower() or "fidélité" in lignes[0].lower() or "miles" in lignes[0].lower():
-            eval_type = "fidélité"
-        else:
-            eval_type = None
+        type_possibles = {
+            "vol": "vol",
+            "hôtel": "hôtel",
+            "hotel": "hôtel",
+            "restaurant": "restaurant",
+            "skywards": "fidélité",
+            "fidélité": "fidélité",
+            "miles": "fidélité"
+        }
+        eval_type = None
+        for mot, t in type_possibles.items():
+            if mot in lignes[0].lower():
+                eval_type = t
+                break
 
         if eval_type:
             try:
                 nom = lignes[0]
                 date = lignes[1]
                 note = int(lignes[2])
-                commentaire = "\\n".join(lignes[3:])
+                commentaire = "\n".join(lignes[3:])
                 ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
-                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
+                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
             except:
-                msg.body("❌ Format invalide. Vérifie que tu envoies bien :\\nNom\\nDate\\nNote (1-5)\\nCommentaire")
+                msg.body("❌ Format invalide. Vérifie que tu envoies bien :\nNom\nDate\nNote (1-5)\nCommentaire")
                 return str(response)
 
     rep = reponse_gpt(incoming_msg)
