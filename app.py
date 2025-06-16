@@ -82,6 +82,10 @@ def webhook():
     response = MessagingResponse()
     msg = response.message()
 
+    if "taxi" in incoming_msg.lower():
+        msg.body("🚕 Nous détectons que vous avez besoin d’un taxi. Veuillez partager votre position ou précisez votre ville actuelle pour recevoir les options disponibles.")
+        return str(response)
+
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
         menu = (
             "👋 Bienvenue chez *Askely* !\n"
@@ -92,8 +96,8 @@ def webhook():
             "4️⃣ Évaluer un restaurant 🍽️\n"
             "5️⃣ Voir tous les avis 🗂️\n"
             "6️⃣ Mon profil 👤\n"
-            "7️⃣ Transport 🚕\n"
-            "8️⃣ Autre question ❓\n\n"
+            "7️⃣ Autre question ❓\n"
+            "8️⃣ Demander un transport 🚕\n\n"
             "📌 Répondez avec *le chiffre* de votre choix."
         )
         msg.body(menu)
@@ -105,7 +109,6 @@ def webhook():
         c.execute("SELECT points FROM utilisateurs WHERE id = ?", (utilisateur_id,))
         row = c.fetchone()
         points = row[0] if row else 0
-
         c.execute("SELECT type, nom, date, note FROM evaluations WHERE utilisateur_id = ? ORDER BY id DESC LIMIT 5", (utilisateur_id,))
         evaluations = c.fetchall()
         conn.close()
@@ -129,24 +132,20 @@ def webhook():
         msg.body(avis)
         return str(response)
 
-    if incoming_msg == "7":
-        msg.body("🚕 Askely : Veux-tu un taxi ou un transport privé ? Envoie simplement ta demande avec le nom de la ville ou ta localisation.")
-        return str(response)
-
     if incoming_msg == "1":
-        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vol\nNote sur 5\nTon commentaire")
+        msg.body("✈️ Pour évaluer un vol, envoie :\nNom compagnie\nDate\nNote sur 5\nCommentaire")
         return str(response)
 
     if incoming_msg == "2":
-        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\n\nNom du programme\nDate\nNote sur 5\nTon commentaire")
+        msg.body("🎁 Pour évaluer un programme de fidélité, envoie :\nNom programme\nDate\nNote sur 5\nCommentaire")
         return str(response)
 
     if incoming_msg == "3":
-        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\n\nNom de l'hôtel\nDate\nNote sur 5\nTon commentaire")
+        msg.body("🏨 Pour évaluer un hôtel, envoie :\nNom hôtel\nDate\nNote sur 5\nCommentaire")
         return str(response)
 
     if incoming_msg == "4":
-        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\n\nNom du restaurant\nDate\nNote sur 5\nTon commentaire")
+        msg.body("🍽️ Pour évaluer un restaurant, envoie :\nNom restaurant\nDate\nNote sur 5\nCommentaire")
         return str(response)
 
     lignes = incoming_msg.split("\n")
@@ -172,7 +171,7 @@ def webhook():
                 msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
             except:
-                msg.body("❌ Format invalide. Vérifie que tu envoies bien :\nNom\nDate\nNote (1-5)\nCommentaire")
+                msg.body("❌ Format invalide. Envoie :\nNom\nDate\nNote sur 5\nCommentaire")
                 return str(response)
 
     rep = reponse_gpt(incoming_msg)
@@ -180,5 +179,4 @@ def webhook():
     return str(response)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=10000, debug=True)
