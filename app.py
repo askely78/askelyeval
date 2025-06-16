@@ -6,10 +6,10 @@ import os
 import openai
 
 app = Flask(__name__)
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def creer_table():
+# Création des tables
+def creer_tables():
     conn = sqlite3.connect("askely.db")
     c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS utilisateurs (
@@ -28,6 +28,7 @@ def creer_table():
     conn.commit()
     conn.close()
 
+# Attribution de points
 def ajouter_points(utilisateur_id, points):
     conn = sqlite3.connect("askely.db")
     c = conn.cursor()
@@ -36,6 +37,7 @@ def ajouter_points(utilisateur_id, points):
     conn.commit()
     conn.close()
 
+# Enregistrement d'une évaluation
 def ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire):
     conn = sqlite3.connect("askely.db")
     c = conn.cursor()
@@ -56,25 +58,27 @@ def get_points_for_type(eval_type):
 def format_etoiles(note):
     return "⭐️" * note + "☆" * (5 - note)
 
+# Requête GPT pour les demandes libres
 def reponse_gpt(texte):
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
+        completion = openai.chat.completions.create(
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
+                {"role": "system", "content": "Tu es Askely, un assistant de voyage intelligent et sympathique."},
                 {"role": "user", "content": texte}
             ]
         )
-        return response.choices[0].message.content.strip()
+        return completion.choices[0].message.content.strip()
     except Exception as e:
-        print("❌ Erreur OpenAI :", e)
-        return f"❌ Une erreur est survenue : {e}"
+        print("Erreur GPT :", e)
+        return "❌ Erreur avec l'intelligence artificielle."
 
-creer_table()
+# Initialisation
+creer_tables()
 
 @app.route("/", methods=["GET"])
-def home():
-    return "Askely Agent is running.", 200
+def accueil():
+    return "✅ Askely est en ligne."
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -82,16 +86,16 @@ def webhook():
     utilisateur_id = request.values.get("From", "")
     latitude = request.values.get("Latitude")
     longitude = request.values.get("Longitude")
+
     response = MessagingResponse()
     msg = response.message()
 
     if latitude and longitude:
-        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}.
-Nous recherchons les meilleures options de transport autour de vous...")
+        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}.")
         return str(response)
 
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
-        menu = (
+        msg.body(
             "👋 Bienvenue chez *Askely* !
 "
             "Gagnez des *points* à chaque avis ✨
@@ -109,14 +113,13 @@ Nous recherchons les meilleures options de transport autour de vous...")
 "
             "6️⃣ Mon profil 👤
 "
-            "7️⃣ Réserver un transport 🚕
+            "7️⃣ Transport ou Taxi 🚖
 "
             "8️⃣ Autre question ❓
 
 "
             "📌 Répondez avec *le chiffre* de votre choix."
         )
-        msg.body(menu)
         return str(response)
 
     if incoming_msg == "6":
@@ -125,9 +128,11 @@ Nous recherchons les meilleures options de transport autour de vous...")
         c.execute("SELECT points FROM utilisateurs WHERE id = ?", (utilisateur_id,))
         row = c.fetchone()
         points = row[0] if row else 0
+
         c.execute("SELECT type, nom, date, note FROM evaluations WHERE utilisateur_id = ? ORDER BY id DESC LIMIT 5", (utilisateur_id,))
         evaluations = c.fetchall()
         conn.close()
+
         profil = f"👤 *Ton profil Askely*
 
 🪙 Points : {points}
@@ -146,6 +151,7 @@ Nous recherchons les meilleures options de transport autour de vous...")
         c.execute("SELECT type, nom, date, note, commentaire FROM evaluations ORDER BY id DESC LIMIT 10")
         evaluations = c.fetchall()
         conn.close()
+
         avis = "🗂️ *Derniers avis de la communauté Askely :*
 "
         for e in evaluations:
@@ -156,28 +162,48 @@ Nous recherchons les meilleures options de transport autour de vous...")
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Envoie :\nNom compagnie\nDate\nNote sur 5\nCommentaire")
+        msg.body("✈️ Pour évaluer un vol, envoie :
+
+Nom de la compagnie
+Date du vol
+Note sur 5
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "2":
-        msg.body("🎁 Envoie :\nNom programme\nDate\nNote sur 5\nCommentaire")
+        msg.body("🎁 Pour évaluer un programme de fidélité, envoie :
+
+Nom du programme
+Date
+Note sur 5
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "3":
-        msg.body("🏨 Envoie :\nNom hôtel\nDate\nNote sur 5\nCommentaire")
+        msg.body("🏨 Pour évaluer un hôtel, envoie :
+
+Nom de l'hôtel
+Date
+Note sur 5
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "4":
-        msg.body("🍽️ Envoie :\nNom restaurant\nDate\nNote sur 5\nCommentaire")
+        msg.body("🍽️ Pour évaluer un restaurant, envoie :
+
+Nom du restaurant
+Date
+Note sur 5
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "7":
-        msg.body("🚕 Veuillez partager votre localisation WhatsApp pour trouver un taxi ou un transport proche de vous.")
+        msg.body("🚕 Pour réserver un taxi ou un transport, veuillez partager votre *localisation actuelle* ou tapez votre *ville de départ*.")
         return str(response)
 
-    lignes = incoming_msg.split("\n")
+    lignes = incoming_msg.split("
+")
     if len(lignes) >= 4:
-        eval_type = None
         if "vol" in lignes[0].lower():
             eval_type = "vol"
         elif "hôtel" in lignes[0].lower() or "hotel" in lignes[0].lower():
@@ -186,21 +212,29 @@ Nous recherchons les meilleures options de transport autour de vous...")
             eval_type = "restaurant"
         elif "skywards" in lignes[0].lower() or "fidélité" in lignes[0].lower() or "miles" in lignes[0].lower():
             eval_type = "fidélité"
+        else:
+            eval_type = None
 
         if eval_type:
             try:
                 nom = lignes[0]
                 date = lignes[1]
                 note = int(lignes[2])
-                commentaire = "\n".join(lignes[3:])
+                commentaire = "
+".join(lignes[3:])
                 ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
                 msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.
 +{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
             except:
-                msg.body("❌ Format invalide. Envoie :\nNom\nDate\nNote (1-5)\nCommentaire")
+                msg.body("❌ Format invalide. Vérifie que tu envoies bien :
+Nom
+Date
+Note (1-5)
+Commentaire")
                 return str(response)
 
+    # GPT pour demandes libres
     rep = reponse_gpt(incoming_msg)
     msg.body(rep)
     return str(response)
