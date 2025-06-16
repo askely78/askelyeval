@@ -6,6 +6,7 @@ import os
 import openai
 
 app = Flask(__name__)
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def creer_table():
@@ -79,25 +80,40 @@ def home():
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
     utilisateur_id = request.values.get("From", "")
+    latitude = request.values.get("Latitude")
+    longitude = request.values.get("Longitude")
     response = MessagingResponse()
     msg = response.message()
 
-    if "taxi" in incoming_msg.lower():
-        msg.body("🚕 Nous détectons que vous avez besoin d’un taxi. Veuillez partager votre position ou précisez votre ville actuelle pour recevoir les options disponibles.")
+    if latitude and longitude:
+        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}.
+Nous recherchons les options de transport près de vous...")
         return str(response)
 
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
         menu = (
-            "👋 Bienvenue chez *Askely* !\n"
-            "Gagnez des *points* à chaque avis ✨\n\n"
-            "1️⃣ Évaluer un vol ✈️\n"
-            "2️⃣ Évaluer un programme de fidélité 🛫\n"
-            "3️⃣ Évaluer un hôtel 🏨\n"
-            "4️⃣ Évaluer un restaurant 🍽️\n"
-            "5️⃣ Voir tous les avis 🗂️\n"
-            "6️⃣ Mon profil 👤\n"
-            "7️⃣ Autre question ❓\n"
-            "8️⃣ Demander un transport 🚕\n\n"
+            "👋 Bienvenue chez *Askely* !
+"
+            "Gagnez des *points* à chaque avis ✨
+
+"
+            "1️⃣ Évaluer un vol ✈️
+"
+            "2️⃣ Évaluer un programme de fidélité 🛫
+"
+            "3️⃣ Évaluer un hôtel 🏨
+"
+            "4️⃣ Évaluer un restaurant 🍽️
+"
+            "5️⃣ Voir tous les avis 🗂️
+"
+            "6️⃣ Mon profil 👤
+"
+            "7️⃣ Réserver un transport 🚖
+"
+            "8️⃣ Autre question ❓
+
+"
             "📌 Répondez avec *le chiffre* de votre choix."
         )
         msg.body(menu)
@@ -109,13 +125,20 @@ def webhook():
         c.execute("SELECT points FROM utilisateurs WHERE id = ?", (utilisateur_id,))
         row = c.fetchone()
         points = row[0] if row else 0
+
         c.execute("SELECT type, nom, date, note FROM evaluations WHERE utilisateur_id = ? ORDER BY id DESC LIMIT 5", (utilisateur_id,))
         evaluations = c.fetchall()
         conn.close()
 
-        profil = f"👤 *Ton profil Askely*\n\n🪙 Points : {points}\n\n📝 *Tes dernières évaluations :*\n"
+        profil = f"👤 *Ton profil Askely*
+
+🪙 Points : {points}
+
+📝 *Tes dernières évaluations :*
+"
         for eval in evaluations:
-            profil += f"\n• {eval[0].capitalize()} – {eval[1]} – {eval[2]} – {format_etoiles(eval[3])}"
+            profil += f"
+• {eval[0].capitalize()} – {eval[1]} – {eval[2]} – {format_etoiles(eval[3])}"
         msg.body(profil)
         return str(response)
 
@@ -126,29 +149,53 @@ def webhook():
         evaluations = c.fetchall()
         conn.close()
 
-        avis = "🗂️ *Derniers avis de la communauté Askely :*\n"
+        avis = "🗂️ *Derniers avis de la communauté Askely :*
+"
         for e in evaluations:
-            avis += f"\n• {e[0].capitalize()} – {e[1]} ({e[2]}) – {format_etoiles(e[3])}\n\"{e[4]}\""
+            avis += f"
+• {e[0].capitalize()} – {e[1]} ({e[2]}) – {format_etoiles(e[3])}
+"{e[4]}""
         msg.body(avis)
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Pour évaluer un vol, envoie :\nNom compagnie\nDate\nNote sur 5\nCommentaire")
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :
+
+Nom de la compagnie
+Date du vol
+Note sur 5
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "2":
-        msg.body("🎁 Pour évaluer un programme de fidélité, envoie :\nNom programme\nDate\nNote sur 5\nCommentaire")
+        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :
+
+Nom du programme (ex : Skywards)
+Date de ton expérience
+Note sur 5
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "3":
-        msg.body("🏨 Pour évaluer un hôtel, envoie :\nNom hôtel\nDate\nNote sur 5\nCommentaire")
+        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :
+
+Nom de l'hôtel
+Date de ton séjour
+Note sur 5
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "4":
-        msg.body("🍽️ Pour évaluer un restaurant, envoie :\nNom restaurant\nDate\nNote sur 5\nCommentaire")
+        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :
+
+Nom du restaurant
+Date de ta visite
+Note sur 5
+Ton commentaire")
         return str(response)
 
-    lignes = incoming_msg.split("\n")
+    lignes = incoming_msg.split("
+")
     if len(lignes) >= 4:
         if "vol" in lignes[0].lower():
             eval_type = "vol"
@@ -166,12 +213,18 @@ def webhook():
                 nom = lignes[0]
                 date = lignes[1]
                 note = int(lignes[2])
-                commentaire = "\n".join(lignes[3:])
+                commentaire = "
+".join(lignes[3:])
                 ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
-                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
+                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.
++{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
             except:
-                msg.body("❌ Format invalide. Envoie :\nNom\nDate\nNote sur 5\nCommentaire")
+                msg.body("❌ Format invalide. Vérifie que tu envoies bien :
+Nom
+Date
+Note (1-5)
+Commentaire")
                 return str(response)
 
     rep = reponse_gpt(incoming_msg)
