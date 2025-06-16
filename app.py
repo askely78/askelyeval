@@ -4,9 +4,9 @@ from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
 import os
 import openai
-import json
 
 app = Flask(__name__)
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def creer_table():
@@ -59,15 +59,16 @@ def format_etoiles(note):
 def reponse_gpt(texte):
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "Tu es Askely, un assistant de voyage intelligent qui aide les utilisateurs pour tout : vols, hôtels, restaurants, taxis, météo, avis, etc."},
+                {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
                 {"role": "user", "content": texte}
             ]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        return "❌ Erreur intelligence artificielle : " + str(e)
+        print("❌ Erreur OpenAI :", e)
+        return f"❌ Une erreur est survenue : {e}"
 
 creer_table()
 
@@ -78,15 +79,9 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
-    latitude = request.values.get("Latitude")
-    longitude = request.values.get("Longitude")
     utilisateur_id = request.values.get("From", "")
     response = MessagingResponse()
     msg = response.message()
-
-    if latitude and longitude:
-        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}. Je cherche les options de transport proches 🚖.")
-        return str(response)
 
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
         menu = (
@@ -107,123 +102,15 @@ def webhook():
 "
             "6️⃣ Mon profil 👤
 "
-            "7️⃣ Je veux un taxi 🚖
+            "7️⃣ Autre question ❓
 "
-            "8️⃣ Autre question ❓
+            "8️⃣ Réserver un transport 🚖
 
 "
             "📌 Répondez avec *le chiffre* de votre choix."
         )
         msg.body(menu)
         return str(response)
-
-    if incoming_msg == "6":
-        conn = sqlite3.connect("askely.db")
-        c = conn.cursor()
-        c.execute("SELECT points FROM utilisateurs WHERE id = ?", (utilisateur_id,))
-        row = c.fetchone()
-        points = row[0] if row else 0
-
-        c.execute("SELECT type, nom, date, note FROM evaluations WHERE utilisateur_id = ? ORDER BY id DESC LIMIT 5", (utilisateur_id,))
-        evaluations = c.fetchall()
-        conn.close()
-
-        profil = f"👤 *Ton profil Askely*
-
-🪙 Points : {points}
-
-📝 *Tes dernières évaluations :*
-"
-        for eval in evaluations:
-            profil += f"
-• {eval[0].capitalize()} – {eval[1]} – {eval[2]} – {format_etoiles(eval[3])}"
-        msg.body(profil)
-        return str(response)
-
-    if incoming_msg == "5":
-        conn = sqlite3.connect("askely.db")
-        c = conn.cursor()
-        c.execute("SELECT type, nom, date, note, commentaire FROM evaluations ORDER BY id DESC LIMIT 10")
-        evaluations = c.fetchall()
-        conn.close()
-
-        avis = "🗂️ *Derniers avis de la communauté Askely :*
-"
-        for e in evaluations:
-            avis += f"
-• {e[0].capitalize()} – {e[1]} ({e[2]}) – {format_etoiles(e[3])}
-"{e[4]}""
-        msg.body(avis)
-        return str(response)
-
-    if incoming_msg == "1":
-        msg.body("✈️ Askely : Pour évaluer un vol, envoie :
-Nom de la compagnie
-Date du vol
-Note sur 5
-Commentaire")
-        return str(response)
-
-    if incoming_msg == "2":
-        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie :
-Nom du programme
-Date
-Note sur 5
-Commentaire")
-        return str(response)
-
-    if incoming_msg == "3":
-        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie :
-Nom de l'hôtel
-Date du séjour
-Note sur 5
-Commentaire")
-        return str(response)
-
-    if incoming_msg == "4":
-        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie :
-Nom du restaurant
-Date
-Note sur 5
-Commentaire")
-        return str(response)
-
-    if incoming_msg == "7" or "taxi" in incoming_msg.lower():
-        msg.body("🚖 Merci ! Veuillez partager votre *localisation actuelle* pour vous proposer des options de transport proches.")
-        return str(response)
-
-    lignes = incoming_msg.split("
-")
-    if len(lignes) >= 4:
-        if "vol" in lignes[0].lower():
-            eval_type = "vol"
-        elif "hôtel" in lignes[0].lower() or "hotel" in lignes[0].lower():
-            eval_type = "hôtel"
-        elif "restaurant" in lignes[0].lower():
-            eval_type = "restaurant"
-        elif "skywards" in lignes[0].lower() or "fidélité" in lignes[0].lower() or "miles" in lignes[0].lower():
-            eval_type = "fidélité"
-        else:
-            eval_type = None
-
-        if eval_type:
-            try:
-                nom = lignes[0]
-                date = lignes[1]
-                note = int(lignes[2])
-                commentaire = "
-".join(lignes[3:])
-                ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
-                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.
-+{get_points_for_type(eval_type)} points gagnés 🪙.")
-                return str(response)
-            except:
-                msg.body("❌ Format invalide. Vérifie que tu envoies bien :
-Nom
-Date
-Note (1-5)
-Commentaire")
-                return str(response)
 
     rep = reponse_gpt(incoming_msg)
     msg.body(rep)
