@@ -3,9 +3,9 @@ from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
 import os
 import openai
+import json
 
 app = Flask(__name__)
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def creer_table():
@@ -57,8 +57,7 @@ def format_etoiles(note):
 
 def reponse_gpt(texte):
     try:
-        client = openai.OpenAI()
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
@@ -79,17 +78,15 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
+    utilisateur_id = request.values.get("From", "")
     latitude = request.values.get("Latitude")
     longitude = request.values.get("Longitude")
-    utilisateur_id = request.values.get("From", "")
     response = MessagingResponse()
     msg = response.message()
 
     if latitude and longitude:
-        msg.body(f"📍 Merci ! Localisation reçue :
-Latitude : {latitude}
-Longitude : {longitude}
-Nous recherchons les options autour de vous...")
+        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}.
+Nous allons vous proposer des services à proximité.")
         return str(response)
 
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
@@ -113,8 +110,6 @@ Nous recherchons les options autour de vous...")
 "
             "7️⃣ Autre question ❓
 
-"
-            "📍 Envoyez votre localisation pour recevoir des services autour de vous.
 "
             "📌 Répondez avec *le chiffre* de votre choix."
         )
@@ -161,38 +156,43 @@ Nous recherchons les options autour de vous...")
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Envoie :
-Nom compagnie
-Date
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :
+
+Nom de la compagnie
+Date du vol
 Note sur 5
-Commentaire")
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "2":
-        msg.body("🎁 Envoie :
-Nom programme fidélité
-Date
+        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :
+
+Nom du programme (ex : Skywards)
+Date de ton expérience
 Note sur 5
-Commentaire")
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "3":
-        msg.body("🏨 Envoie :
-Nom hôtel
-Date
+        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :
+
+Nom de l'hôtel
+Date de ton séjour
 Note sur 5
-Commentaire")
+Ton commentaire")
         return str(response)
 
     if incoming_msg == "4":
-        msg.body("🍽️ Envoie :
-Nom restaurant
-Date
+        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :
+
+Nom du restaurant
+Date de ta visite
 Note sur 5
-Commentaire")
+Ton commentaire")
         return str(response)
 
-    lignes = incoming_msg.split("\n")
+    lignes = incoming_msg.split("
+")
     if len(lignes) >= 4:
         if "vol" in lignes[0].lower():
             eval_type = "vol"
@@ -210,13 +210,14 @@ Commentaire")
                 nom = lignes[0]
                 date = lignes[1]
                 note = int(lignes[2])
-                commentaire = "\n".join(lignes[3:])
+                commentaire = "
+".join(lignes[3:])
                 ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
                 msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.
 +{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
             except:
-                msg.body("❌ Format invalide. Vérifie :
+                msg.body("❌ Format invalide. Vérifie que tu envoies bien :
 Nom
 Date
 Note (1-5)
