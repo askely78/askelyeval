@@ -72,6 +72,10 @@ def reponse_gpt(texte):
 
 creer_table()
 
+@app.route("/", methods=["GET"])
+def home():
+    return "Askely Agent is running.", 200
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
