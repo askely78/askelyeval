@@ -4,9 +4,9 @@ from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
 import os
 import openai
+import json
 
 app = Flask(__name__)
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def creer_table():
@@ -59,16 +59,15 @@ def format_etoiles(note):
 def reponse_gpt(texte):
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
+                {"role": "system", "content": "Tu es Askely, un assistant de voyage intelligent qui aide les utilisateurs pour tout : vols, hôtels, restaurants, taxis, météo, avis, etc."},
                 {"role": "user", "content": texte}
             ]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print("❌ Erreur OpenAI :", e)
-        return f"❌ Une erreur est survenue : {e}"
+        return "❌ Erreur intelligence artificielle : " + str(e)
 
 creer_table()
 
@@ -79,15 +78,14 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
-    utilisateur_id = request.values.get("From", "")
     latitude = request.values.get("Latitude")
     longitude = request.values.get("Longitude")
+    utilisateur_id = request.values.get("From", "")
     response = MessagingResponse()
     msg = response.message()
 
     if latitude and longitude:
-        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}.
-Nous recherchons les options de transport près de vous...")
+        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}. Je cherche les options de transport proches 🚖.")
         return str(response)
 
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
@@ -109,7 +107,7 @@ Nous recherchons les options de transport près de vous...")
 "
             "6️⃣ Mon profil 👤
 "
-            "7️⃣ Réserver un transport 🚖
+            "7️⃣ Je veux un taxi 🚖
 "
             "8️⃣ Autre question ❓
 
@@ -159,39 +157,39 @@ Nous recherchons les options de transport près de vous...")
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :
-
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie :
 Nom de la compagnie
 Date du vol
 Note sur 5
-Ton commentaire")
+Commentaire")
         return str(response)
 
     if incoming_msg == "2":
-        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :
-
-Nom du programme (ex : Skywards)
-Date de ton expérience
+        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie :
+Nom du programme
+Date
 Note sur 5
-Ton commentaire")
+Commentaire")
         return str(response)
 
     if incoming_msg == "3":
-        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :
-
+        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie :
 Nom de l'hôtel
-Date de ton séjour
+Date du séjour
 Note sur 5
-Ton commentaire")
+Commentaire")
         return str(response)
 
     if incoming_msg == "4":
-        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :
-
+        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie :
 Nom du restaurant
-Date de ta visite
+Date
 Note sur 5
-Ton commentaire")
+Commentaire")
+        return str(response)
+
+    if incoming_msg == "7" or "taxi" in incoming_msg.lower():
+        msg.body("🚖 Merci ! Veuillez partager votre *localisation actuelle* pour vous proposer des options de transport proches.")
         return str(response)
 
     lignes = incoming_msg.split("
