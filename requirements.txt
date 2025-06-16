@@ -1,4 +1,7 @@
 
 flask
 twilio
-openai>=1.0
+flask
+twilio
+openai==0.28.0
+
