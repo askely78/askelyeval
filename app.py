@@ -57,17 +57,18 @@ def format_etoiles(note):
 
 def reponse_gpt(texte):
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-nano",
-            messages=[
-                {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
-                {"role": "user", "content": texte}
-            ]
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=texte,
+            max_tokens=150,
+            temperature=0.7,
+            n=1,
+            stop=None
         )
-        return response.choices[0].message.content.strip()
+        return response.choices[0].text.strip()
     except Exception as e:
-        print("Erreur OpenAI :", e)
-        return "❌ Une erreur est survenue avec l'intelligence artificielle. Veuillez réessayer plus tard."
+        print("❌ Erreur OpenAI :", e)
+        return f"❌ Une erreur est survenue : {e}"
 
 creer_table()
 
