@@ -1,4 +1,6 @@
-flask>=2.0.0
-twilio>=7.0.0
-openai>=1.0.0,<2.0.0
+flask
+twilio
+openai>=1.0.0
 requests
+geopy
+sqlite3
