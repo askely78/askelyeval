@@ -1,13 +1,11 @@
-
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
 import os
-import openai
+from openai import OpenAI
 
 app = Flask(__name__)
-
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def creer_table():
     conn = sqlite3.connect("askely.db")
@@ -56,29 +54,19 @@ def get_points_for_type(eval_type):
 def format_etoiles(note):
     return "⭐️" * note + "☆" * (5 - note)
 
-def detecter_ville_depuis_coords(lat, lon):
-    if 33.5 <= lat <= 33.7 and -7.7 <= lon <= -7.5:
-        return "Casablanca"
-    elif 34.0 <= lat <= 34.1 and -6.9 <= lon <= -6.7:
-        return "Rabat"
-    elif 31.6 <= lat <= 31.7 and -8.1 <= lon <= -7.9:
-        return "Marrakech"
-    else:
-        return None
-
 def reponse_gpt(texte):
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        completion = client.chat.completions.create(
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
+                {"role": "system", "content": "Tu es Askely, un assistant intelligent pour les voyages et le transport."},
                 {"role": "user", "content": texte}
             ]
         )
-        return response.choices[0].message.content.strip()
+        return completion.choices[0].message.content.strip()
     except Exception as e:
         print("❌ Erreur OpenAI :", e)
-        return f"❌ Une erreur est survenue : {e}"
+        return f"❌ Une erreur est survenue avec l'intelligence artificielle : {e}"
 
 creer_table()
 
@@ -89,20 +77,18 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
-    utilisateur_id = request.values.get("From", "")
     latitude = request.values.get("Latitude")
     longitude = request.values.get("Longitude")
+    utilisateur_id = request.values.get("From", "")
     response = MessagingResponse()
     msg = response.message()
 
     if latitude and longitude:
-        lat = float(latitude)
-        lon = float(longitude)
-        ville = detecter_ville_depuis_coords(lat, lon)
-        if ville:
-            msg.body(f"📍 Ville détectée : *{ville}*\nVoici des options de transport au départ de {ville} :\n\n🚗 Yassir\n🚕 inDrive\n🚐 Transfert privé\n\nRépondez avec le service souhaité.")
-        else:
-            msg.body(f"📍 Localisation reçue : {lat}, {lon}.\nNous n'avons pas encore de services pour cette zone.")
+        msg.body(f"📍 Merci ! Localisation reçue : {latitude}, {longitude}. Nous recherchons les transports disponibles autour de vous...")
+        return str(response)
+
+    if any(mot in incoming_msg.lower() for mot in ["taxi", "chauffeur", "voiture", "uber", "transport"]):
+        msg.body("🚕 Veux-tu partager ta position pour trouver un taxi proche ? Envoie ta localisation 📍.")
         return str(response)
 
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
@@ -149,43 +135,46 @@ def webhook():
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Envoie les infos sous la forme :\nNom compagnie\nDate du vol\nNote sur 5\nCommentaire")
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vol\nNote sur 5\nTon commentaire")
         return str(response)
+
     if incoming_msg == "2":
-        msg.body("🎁 Envoie :\nNom du programme\nDate\nNote sur 5\nCommentaire")
+        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\n\nNom du programme\nDate\nNote sur 5\nTon commentaire")
         return str(response)
+
     if incoming_msg == "3":
-        msg.body("🏨 Envoie :\nNom hôtel\nDate\nNote sur 5\nCommentaire")
+        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\n\nNom de l'hôtel\nDate\nNote sur 5\nTon commentaire")
         return str(response)
+
     if incoming_msg == "4":
-        msg.body("🍽️ Envoie :\nNom restaurant\nDate\nNote sur 5\nCommentaire")
+        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\n\nNom du restaurant\nDate\nNote sur 5\nTon commentaire")
         return str(response)
 
     lignes = incoming_msg.split("\n")
     if len(lignes) >= 4:
-        if "vol" in lignes[0].lower():
-            eval_type = "vol"
-        elif "hôtel" in lignes[0].lower() or "hotel" in lignes[0].lower():
-            eval_type = "hôtel"
-        elif "restaurant" in lignes[0].lower():
-            eval_type = "restaurant"
-        elif "skywards" in lignes[0].lower() or "fidélité" in lignes[0].lower() or "miles" in lignes[0].lower():
-            eval_type = "fidélité"
-        else:
-            eval_type = None
+        try:
+            nom = lignes[0]
+            date = lignes[1]
+            note = int(lignes[2])
+            commentaire = "\n".join(lignes[3:])
+            if "vol" in nom.lower():
+                eval_type = "vol"
+            elif "hôtel" in nom.lower() or "hotel" in nom.lower():
+                eval_type = "hôtel"
+            elif "restaurant" in nom.lower():
+                eval_type = "restaurant"
+            elif any(m in nom.lower() for m in ["skywards", "fidélité", "miles"]):
+                eval_type = "fidélité"
+            else:
+                eval_type = None
 
-        if eval_type:
-            try:
-                nom = lignes[0]
-                date = lignes[1]
-                note = int(lignes[2])
-                commentaire = "\n".join(lignes[3:])
+            if eval_type:
                 ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
                 msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
-            except:
-                msg.body("❌ Format invalide. Utilise :\nNom\nDate\nNote sur 5\nCommentaire")
-                return str(response)
+        except:
+            msg.body("❌ Format invalide. Vérifie que tu envoies bien :\nNom\nDate\nNote (1-5)\nCommentaire")
+            return str(response)
 
     rep = reponse_gpt(incoming_msg)
     msg.body(rep)
