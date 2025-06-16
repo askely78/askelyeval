@@ -56,10 +56,20 @@ def get_points_for_type(eval_type):
 def format_etoiles(note):
     return "⭐️" * note + "☆" * (5 - note)
 
+def detecter_ville_depuis_coords(lat, lon):
+    if 33.5 <= lat <= 33.7 and -7.7 <= lon <= -7.5:
+        return "Casablanca"
+    elif 34.0 <= lat <= 34.1 and -6.9 <= lon <= -6.7:
+        return "Rabat"
+    elif 31.6 <= lat <= 31.7 and -8.1 <= lon <= -7.9:
+        return "Marrakech"
+    else:
+        return None
+
 def reponse_gpt(texte):
     try:
-        response = openai.chat.completions.create(
-            model="gpt-4",
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Tu es Askely, un assistant intelligent et sympathique."},
                 {"role": "user", "content": texte}
@@ -80,8 +90,20 @@ def home():
 def webhook():
     incoming_msg = request.values.get("Body", "").strip()
     utilisateur_id = request.values.get("From", "")
+    latitude = request.values.get("Latitude")
+    longitude = request.values.get("Longitude")
     response = MessagingResponse()
     msg = response.message()
+
+    if latitude and longitude:
+        lat = float(latitude)
+        lon = float(longitude)
+        ville = detecter_ville_depuis_coords(lat, lon)
+        if ville:
+            msg.body(f"📍 Ville détectée : *{ville}*\nVoici des options de transport au départ de {ville} :\n\n🚗 Yassir\n🚕 inDrive\n🚐 Transfert privé\n\nRépondez avec le service souhaité.")
+        else:
+            msg.body(f"📍 Localisation reçue : {lat}, {lon}.\nNous n'avons pas encore de services pour cette zone.")
+        return str(response)
 
     if incoming_msg.lower() in ["bonjour", "salut", "hello", "menu", "start"]:
         menu = (
@@ -105,11 +127,9 @@ def webhook():
         c.execute("SELECT points FROM utilisateurs WHERE id = ?", (utilisateur_id,))
         row = c.fetchone()
         points = row[0] if row else 0
-
         c.execute("SELECT type, nom, date, note FROM evaluations WHERE utilisateur_id = ? ORDER BY id DESC LIMIT 5", (utilisateur_id,))
         evaluations = c.fetchall()
         conn.close()
-
         profil = f"👤 *Ton profil Askely*\n\n🪙 Points : {points}\n\n📝 *Tes dernières évaluations :*\n"
         for eval in evaluations:
             profil += f"\n• {eval[0].capitalize()} – {eval[1]} – {eval[2]} – {format_etoiles(eval[3])}"
@@ -122,7 +142,6 @@ def webhook():
         c.execute("SELECT type, nom, date, note, commentaire FROM evaluations ORDER BY id DESC LIMIT 10")
         evaluations = c.fetchall()
         conn.close()
-
         avis = "🗂️ *Derniers avis de la communauté Askely :*\n"
         for e in evaluations:
             avis += f"\n• {e[0].capitalize()} – {e[1]} ({e[2]}) – {format_etoiles(e[3])}\n\"{e[4]}\""
@@ -130,19 +149,16 @@ def webhook():
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vol\nNote sur 5\nTon commentaire")
+        msg.body("✈️ Envoie les infos sous la forme :\nNom compagnie\nDate du vol\nNote sur 5\nCommentaire")
         return str(response)
-
     if incoming_msg == "2":
-        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\n\nNom du programme\nDate\nNote sur 5\nCommentaire")
+        msg.body("🎁 Envoie :\nNom du programme\nDate\nNote sur 5\nCommentaire")
         return str(response)
-
     if incoming_msg == "3":
-        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\n\nNom de l'hôtel\nDate du séjour\nNote sur 5\nCommentaire")
+        msg.body("🏨 Envoie :\nNom hôtel\nDate\nNote sur 5\nCommentaire")
         return str(response)
-
     if incoming_msg == "4":
-        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\n\nNom du restaurant\nDate\nNote sur 5\nCommentaire")
+        msg.body("🍽️ Envoie :\nNom restaurant\nDate\nNote sur 5\nCommentaire")
         return str(response)
 
     lignes = incoming_msg.split("\n")
@@ -168,7 +184,7 @@ def webhook():
                 msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
             except:
-                msg.body("❌ Format invalide. Vérifie que tu envoies bien :\nNom\nDate\nNote (1-5)\nCommentaire")
+                msg.body("❌ Format invalide. Utilise :\nNom\nDate\nNote sur 5\nCommentaire")
                 return str(response)
 
     rep = reponse_gpt(incoming_msg)
