@@ -1,5 +1,3 @@
-# Réécriture complète et sécurisée du fichier app.py avec guillemets bien fermés
-contenu_corrige = '''
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import sqlite3
@@ -67,21 +65,10 @@ def reponse_gpt(texte):
             ]
         )
         return response.choices[0].message.content.strip()
-    except Exception as e:
+    except Exception:
         return "❌ Une erreur est survenue avec l'intelligence artificielle."
 
 creer_table()
-'''
-
-# Sauvegarde de la partie 1 dans un fichier temporaire
-partie_1_path = "/mnt/data/app_part1.py"
-with open(partie_1_path, "w", encoding="utf-8") as f:
-    f.write(contenu_corrige)
-
-partie_1_path
-# Partie 2 du fichier app.py
-contenu_partie_2 = '''
-from flask import jsonify
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -122,16 +109,7 @@ def webhook():
             profil += f"\n• {eval[0].capitalize()} – {eval[1]} – {eval[2]} – {format_etoiles(eval[3])}"
         msg.body(profil)
         return str(response)
-'''
 
-# Sauvegarde de la partie 2
-partie_2_path = "/mnt/data/app_part2.py"
-with open(partie_2_path, "w", encoding="utf-8") as f:
-    f.write(contenu_partie_2)
-
-partie_2_path
-# Partie 3 du fichier app.py
-contenu_partie_3 = '''
     if incoming_msg == "5":
         conn = sqlite3.connect("askely.db")
         c = conn.cursor()
@@ -146,30 +124,21 @@ contenu_partie_3 = '''
         return str(response)
 
     if incoming_msg == "1":
-        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\n\nNom de la compagnie\nDate du vol\nNote sur 5\nTon commentaire")
+        msg.body("✈️ Askely : Pour évaluer un vol, envoie les infos sous cette forme :\\n\\nNom de la compagnie\\nDate du vol\\nNote sur 5\\nTon commentaire")
         return str(response)
 
     if incoming_msg == "2":
-        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\n\nNom du programme (ex : Skywards)\nDate de ton expérience\nNote sur 5\nTon commentaire")
+        msg.body("🎁 Askely : Pour évaluer un programme de fidélité, envoie les infos sous cette forme :\\n\\nNom du programme (ex : Skywards)\\nDate de ton expérience\\nNote sur 5\\nTon commentaire")
         return str(response)
 
     if incoming_msg == "3":
-        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\n\nNom de l'hôtel\nDate de ton séjour\nNote sur 5\nTon commentaire")
+        msg.body("🏨 Askely : Pour évaluer un hôtel, envoie les infos sous cette forme :\\n\\nNom de l'hôtel\\nDate de ton séjour\\nNote sur 5\\nTon commentaire")
         return str(response)
 
     if incoming_msg == "4":
-        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\n\nNom du restaurant\nDate de ta visite\nNote sur 5\nTon commentaire")
+        msg.body("🍽️ Askely : Pour évaluer un restaurant, envoie les infos sous cette forme :\\n\\nNom du restaurant\\nDate de ta visite\\nNote sur 5\\nTon commentaire")
         return str(response)
-'''
 
-# Sauvegarde de la partie 3
-partie_3_path = "/mnt/data/app_part3.py"
-with open(partie_3_path, "w", encoding="utf-8") as f:
-    f.write(contenu_partie_3)
-
-partie_3_path
-# Partie 4 du fichier app.py
-contenu_partie_4 = '''
     lignes = incoming_msg.split("\\n")
     if len(lignes) >= 4:
         if "vol" in lignes[0].lower():
@@ -190,38 +159,15 @@ contenu_partie_4 = '''
                 note = int(lignes[2])
                 commentaire = "\\n".join(lignes[3:])
                 ajouter_evaluation(utilisateur_id, eval_type, nom, date, note, commentaire)
-                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
+                msg.body(f"✅ Merci ! Ton avis a été enregistré pour *{eval_type}* avec {note}⭐️.\\n+{get_points_for_type(eval_type)} points gagnés 🪙.")
                 return str(response)
             except:
                 msg.body("❌ Format invalide. Vérifie que tu envoies bien :\\nNom\\nDate\\nNote (1-5)\\nCommentaire")
                 return str(response)
-'''
 
-# Sauvegarde de la partie 4
-partie_4_path = "/mnt/data/app_part4.py"
-with open(partie_4_path, "w", encoding="utf-8") as f:
-    f.write(contenu_partie_4)
-
-partie_4_path
-# Partie 5 du fichier app.py
-contenu_partie_5 = '''
-    # Si le message ne correspond à aucun format → GPT
-    try:
-        rep = reponse_gpt(incoming_msg)
-        msg.body(rep)
-        return str(response)
-    except:
-        msg.body("❌ Désolé, je n’ai pas compris ta demande. Réessaie ou tape 'menu' pour voir les options disponibles.")
-        return str(response)
+    rep = reponse_gpt(incoming_msg)
+    msg.body(rep)
+    return str(response)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000, debug=True)
-'''
-
-# Sauvegarde de la partie 5
-partie_5_path = "/mnt/data/app_part5.py"
-with open(partie_5_path, "w", encoding="utf-8") as f:
-    f.write(contenu_partie_5)
-
-partie_5_path
-
